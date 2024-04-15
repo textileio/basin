@@ -1,0 +1,23 @@
+[package]
+authors = { workspace = true }
+edition = { workspace = true }
+description = "A transaction signer for interacting with the Amazing Data Machine (ADM)"
+name = "adm_signer"
+homepage = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+hex = { workspace = true }
+
+fvm_ipld_encoding = { workspace = true }
+fvm_shared = { workspace = true }
+
+fendermint_crypto = { workspace = true }
+fendermint_vm_actor_interface = { workspace = true }
+fendermint_vm_message = { workspace = true }
+
+adm_provider = { path = "../provider" }

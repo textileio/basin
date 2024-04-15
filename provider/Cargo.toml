@@ -1,0 +1,33 @@
+[package]
+authors = { workspace = true }
+edition = { workspace = true }
+description = "A chain provider for interacting with the Amazing Data Machine (ADM)"
+name = "adm_provider"
+homepage = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+cid = { workspace = true }
+num-traits = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+tendermint = { workspace = true }
+tendermint-rpc = { workspace = true }
+tendermint-proto = { workspace = true }
+tracing = { workspace = true }
+
+fvm_ipld_encoding = { workspace = true }
+fvm_shared = { workspace = true }
+
+fendermint_vm_actor_interface = { workspace = true }
+fendermint_vm_message = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

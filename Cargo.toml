@@ -1,0 +1,67 @@
+[workspace]
+members = ["provider", "sdk", "signer"]
+resolver = "2"
+
+[workspace.package]
+authors = ["TODO"]
+description = "The Amazing Data Machine (ADM)"
+edition = "2021"
+homepage = "https://github.com/amazingdatamachine/adm/"
+license = "MIT OR Apache-2.0"
+license-file = "LICENSE-APACHE"
+readme = "./README.md"
+repository = "https://github.com/amazingdatamachine/adm/"
+keywords = ["TODO"]
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1.0.82"
+async-trait = "0.1.80"
+base64 = "0.22.0"
+bytes = "1.6.0"
+cid = { version = "0.10.1", default-features = false, features = [
+    "serde-codec",
+    "std",
+] }
+clap = { version = "4.1.14", features = ["derive", "env", "string"] }
+hex = "0.4.3"
+num-traits = "0.2.18"
+prost = { version = "0.11.9" }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+tracing = "0.1.40"
+
+# Using the same tendermint-rs dependency as tower-abci. From both we are interested in v037 modules.
+tendermint = { version = "0.31.1", features = ["secp256k1"] }
+tendermint-proto = { version = "0.31.1" }
+tendermint-rpc = { version = "0.31.1", features = [
+    "secp256k1",
+    "http-client",
+    "websocket-client",
+] }
+
+fvm_shared = { version = "4.1.0" }
+fvm_ipld_encoding = "0.4.0"
+
+fendermint_actor_accumulator = { git = "ssh://git@github.com/amazingdatamachine/ipc.git", branch = "sander/machines" }
+fendermint_actor_machine = { git = "ssh://git@github.com/amazingdatamachine/ipc.git", branch = "sander/machines" }
+fendermint_actor_objectstore = { git = "ssh://git@github.com/amazingdatamachine/ipc.git", branch = "sander/machines" }
+fendermint_crypto = { git = "ssh://git@github.com/amazingdatamachine/ipc.git", branch = "sander/machines" }
+fendermint_vm_actor_interface = { git = "ssh://git@github.com/amazingdatamachine/ipc.git", branch = "sander/machines" }
+fendermint_vm_core = { git = "ssh://git@github.com/amazingdatamachine/ipc.git", branch = "sander/machines" }
+fendermint_vm_message = { git = "ssh://git@github.com/amazingdatamachine/ipc.git", branch = "sander/machines" }
+
+[patch.crates-io]
+# Contains some API changes that the upstream has not merged.
+merkle-tree-rs = { git = "https://github.com/consensus-shipyard/merkle-tree-rs.git", branch = "dev" }
+
+# Uncomment entries below when working locally on ipc and this repo simultaneously.
+# Assumes the ipc checkout is in a sibling directory with the same name.
+[patch."ssh://git@github.com/amazingdatamachine/ipc.git"]
+fendermint_actor_accumulator = { path = "../ipc/fendermint/actors/accumulator" }
+fendermint_actor_machine = { path = "../ipc/fendermint/actors/machine" }
+fendermint_actor_objectstore = { path = "../ipc/fendermint/actors/objectstore" }
+fendermint_crypto = { path = "../ipc/fendermint/crypto" }
+fendermint_vm_actor_interface = { path = "../ipc/fendermint/vm/actor_interface" }
+fendermint_vm_core = { path = "../ipc/fendermint/vm/core" }
+fendermint_vm_message = { path = "../ipc/fendermint/vm/message" }
