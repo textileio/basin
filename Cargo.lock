@@ -6251,8 +6251,7 @@ checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 [[package]]
 name = "unixfs-v1"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86282f2e28a4c03b7ec2f8029c33165f80baafc7c3aae9e4456a6085d240f39a"
+source = "git+https://github.com/ipfs-rust/unixfsv1?branch=master#01d8d9f70dc69c4ace4d52f6d8d4daf0c32d56bc"
 dependencies = [
  "either",
  "filetime",
