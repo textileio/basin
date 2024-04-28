@@ -184,7 +184,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
 
                     upload_progress.show_uploaded(response_cid.clone());
                     assert!(response_cid == object_cid);
-
                     upload_progress.show_cid_verified();
                     upload_progress.finish();
 
@@ -197,8 +196,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             Default::default(),
                         )
                         .await?;
-
-                    print_json(&tx).unwrap();
+                    print_json(&tx)?;
                 }
                 Err(e) => {
                     // internal object
@@ -219,7 +217,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             )
                             .await?;
 
-                        print_json(&tx).unwrap();
+                        print_json(&tx)?;
                     } else {
                         return Err(e.into());
                     }

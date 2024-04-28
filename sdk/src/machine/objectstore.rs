@@ -231,7 +231,9 @@ pub async fn generate_cid(tmp: &mut TempFile) -> anyhow::Result<Cid> {
         }
     }
     let unixfs_iterator = adder.finish();
-    let (cid, _) = unixfs_iterator.last().unwrap();
-    let cid = Cid::try_from(cid.to_bytes())?;
+    let (cid, _) = unixfs_iterator
+        .last()
+        .ok_or_else(|| anyhow!("Cannot get root CID"))?;
+    let cid = Cid::try_from(cid.to_bytes()).map_err(|e| anyhow!("Cannot generate CID: {}", e))?;
     Ok(cid)
 }
