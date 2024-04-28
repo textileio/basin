@@ -4,7 +4,6 @@
 // TODO: Handle gas options
 // TODO: Handle broadcast mode options
 // TODO: Add command for Adm::transfer
-// TODO: Add doc strings for accumulator commands (they show with --help)
 // TODO: Parse returned account addresses as EthAddress (hex)
 
 use anyhow::anyhow;

@@ -55,6 +55,7 @@ dependencies = [
  "fvm_shared",
  "indicatif",
  "k256",
+ "rand",
  "reqwest 0.12.3",
  "serde",
  "serde_json",

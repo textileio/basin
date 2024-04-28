@@ -25,27 +25,34 @@ pub struct AccumulatorArgs {
 
 #[derive(Clone, Debug, Subcommand)]
 enum AccumulatorCommands {
+    /// Create a new accumulator
     Create(AccumulatorCreateArgs),
+    /// Push a new value to the accumulator
     Push(AccumulatorPushArgs),
+    /// Get the current root of the accumulator
     Root(AccumulatorRootArgs),
 }
 
 #[derive(Clone, Debug, Args)]
 struct AccumulatorCreateArgs {
+    /// Allow public write access to the accumulator
     #[arg(long, default_value_t = false)]
     public_write: bool,
 }
 
 #[derive(Clone, Debug, Args)]
 struct AccumulatorPushArgs {
+    /// Address of the accumulator actor
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
+    /// Input file (or stdin) containing the value to push
     #[clap(default_value = "-")]
     input: FileOrStdin,
 }
 
 #[derive(Clone, Debug, Args)]
 struct AccumulatorRootArgs {
+    /// Address of the accumulator actor
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
 }

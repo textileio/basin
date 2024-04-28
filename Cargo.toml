@@ -49,6 +49,7 @@ indicatif = "0.17.8"
 console = "0.15.8"
 async-tempfile = "0.5.0"
 unixfs-v1 = { git = "https://github.com/ipfs-rust/unixfsv1", branch = "master" }
+rand = "0.8.4"
 
 # Using the same tendermint-rs dependency as tower-abci. From both we are interested in v037 modules.
 tendermint = { version = "0.31.1", features = ["secp256k1"] }
