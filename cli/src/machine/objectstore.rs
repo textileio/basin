@@ -3,7 +3,6 @@
 
 use anyhow::anyhow;
 use async_tempfile::TempFile;
-use cid::multihash::{Code, MultihashDigest};
 use cid::Cid;
 use clap::{Args, Parser, Subcommand};
 use clap_stdin::FileOrStdin;
@@ -107,7 +106,7 @@ struct ObjectstoreListArgs {
 }
 
 pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Result<()> {
-    let provider = JsonRpcProvider::new_http(cli.rpc_url.clone(), None)?;
+    let provider = JsonRpcProvider::new_http(cli.rpc_url, None)?;
     let chain_id = chainid::from_str_hashed(&cli.chain_name)?;
     let object_client = ObjectClient::new(cli.object_api_url, u64::from(chain_id));
 
@@ -140,8 +139,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             match reader.read_exact(&mut first_chunk).await {
                 Ok(first_chunk_size) => {
                     let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
-                    let bytes_read = Arc::new(Mutex::new(0 as usize));
-                    let cid = Arc::new(Mutex::new(Cid::new_v0(Code::Sha2_256.digest(&[]))?));
+                    let bytes_read = Arc::new(Mutex::new(0usize));
+                    let cid = Arc::new(Mutex::new(Cid::default()));
 
                     upload_progress.show_processing();
 
@@ -153,9 +152,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     let local_set = LocalSet::new();
                     let chunk = first_chunk[..first_chunk_size].to_vec();
                     local_set.spawn_local(async {
-                        match process_read_chunk(reader, tx, chunk, bytes_read_clone, cid_clone)
-                            .await
-                        {
+                        match process_chunk(reader, tx, chunk, bytes_read_clone, cid_clone).await {
                             Ok(_) => {}
                             Err(e) => {
                                 panic!("Error reading from input: {:?}", e);
@@ -305,7 +302,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
     }
 }
 
-async fn process_read_chunk(
+async fn process_chunk(
     mut reader: impl AsyncRead + Unpin,
     tx: Sender<Vec<u8>>,
     first_chunk: Vec<u8>,
@@ -316,8 +313,8 @@ async fn process_read_chunk(
     let mut tmp = TempFile::new().await?;
     let mut upload_buffer = vec![0; 10 * 1024 * 1024];
 
-    // write first chunk to temp file and also
-    // to mpsc channel for uploading
+    // write first chunk to temp file for CID computation
+    // and also to mpsc channel for uploading
     tx.send(first_chunk.clone()).await.unwrap();
     tmp.write_all(&first_chunk).await?;
 
@@ -401,5 +398,96 @@ impl ObjectProgressBar {
 
     fn finish(&self) {
         self.inner.finish_and_clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{thread_rng, Rng};
+    use std::io::Error;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use tokio::io::AsyncRead;
+    use tokio::io::ReadBuf;
+    use tokio::sync::mpsc;
+
+    struct MockReader {
+        content: Vec<u8>,
+        pos: usize,
+    }
+
+    impl MockReader {
+        fn new(content: Vec<u8>) -> Self {
+            MockReader { content, pos: 0 }
+        }
+    }
+
+    impl AsyncRead for MockReader {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<Result<(), Error>> {
+            if self.pos >= self.content.len() {
+                return Poll::Ready(Ok(()));
+            }
+            let max_len = buf.remaining();
+            let data_len = self.content.len() - self.pos;
+            let len_to_copy = std::cmp::min(max_len, data_len);
+
+            buf.put_slice(&self.content[self.pos..self.pos + len_to_copy]);
+            self.pos += len_to_copy;
+
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_chunk() {
+        let mut rng = thread_rng();
+        let mut reader_content = vec![0u8; 1024];
+        rng.fill(&mut reader_content[..]);
+
+        let mut reader = MockReader::new(reader_content.clone());
+        let (tx, mut rx) = mpsc::channel(10);
+
+        // Read first 1024 bytes from the reader an assign it to first chunk
+        let mut first_chunk = vec![0u8; 1024];
+        reader
+            .read_exact(&mut first_chunk)
+            .await
+            .expect("Failed to read the first chunk");
+
+        let bytes_read = Arc::new(Mutex::new(0));
+        let cid = Arc::new(Mutex::new(Cid::default()));
+
+        process_chunk(
+            reader,
+            tx,
+            first_chunk.clone(),
+            bytes_read.clone(),
+            cid.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Initialize an empty vector to hold the chunks received
+        let mut sent_chunks = Vec::new();
+        while let Some(chunk) = rx.recv().await {
+            sent_chunks.push(chunk);
+        }
+
+        // Verify total bytes_read (first_chunk + remaining)
+        let total_bytes = *bytes_read.lock().await;
+        assert_eq!(total_bytes + first_chunk.len(), 1024);
+
+        // Verify CID calculation in process_chunk
+        let mut tmp = TempFile::new().await.unwrap();
+        tmp.write_all(&reader_content).await.unwrap();
+        tmp.flush().await.unwrap();
+        tmp.rewind().await.unwrap();
+        let expected_cid = generate_cid(&mut tmp).await.unwrap();
+        assert_eq!(expected_cid, cid.lock().await.clone());
     }
 }
