@@ -27,16 +27,8 @@ stderrlog = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
-base64 = { workspace = true }
-ethers = { workspace = true }
-k256 = { workspace = true }
-tokio-stream = { workspace = true }
-futures = { workspace = true }
-futures-util = { workspace = true }
 indicatif = { workspace = true }
 console = { workspace = true }
-async-tempfile = { workspace = true }
-rand = { workspace = true }
 
 tendermint-rpc = { workspace = true }
 

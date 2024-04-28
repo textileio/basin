@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use anyhow::anyhow;
-use async_tempfile::TempFile;
 use cid::Cid;
 use clap::{Args, Parser, Subcommand};
 use clap_stdin::FileOrStdin;
@@ -15,18 +14,13 @@ use fvm_ipld_encoding::serde_bytes::ByteBuf;
 use fvm_shared::address::Address;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::json;
-use std::sync::Arc;
 use tendermint_rpc::HttpClient;
 use tokio::fs::File;
-use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use tokio::sync::{
-    Mutex,
-    {mpsc, mpsc::Sender},
-};
-use tokio::task::LocalSet;
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc;
 
 use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, BroadcastMode};
-use adm_sdk::machine::{objectstore::generate_cid, objectstore::ObjectStore, Machine};
+use adm_sdk::machine::{objectstore, objectstore::ObjectStore, Machine};
 
 use crate::{get_signer, parse_address, print_json, Cli};
 
@@ -139,37 +133,18 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             match reader.read_exact(&mut first_chunk).await {
                 Ok(first_chunk_size) => {
                     let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
-                    let bytes_read = Arc::new(Mutex::new(0usize));
-                    let cid = Arc::new(Mutex::new(Cid::default()));
-
+                    // Preprocess Object before uploading
                     upload_progress.show_processing();
+                    let (object_cid, bytes_read) =
+                        objectstore::process_object(reader, tx, first_chunk).await?;
 
-                    // Spawn the non-Send future within the local task set
-                    // This is necessary because the clap's AsyncReader impl
-                    // is not `Send`. LocalSet is used to spawn the non-Send futures.
-                    let bytes_read_clone = bytes_read.clone();
-                    let cid_clone = cid.clone();
-                    let local_set = LocalSet::new();
-                    let chunk = first_chunk[..first_chunk_size].to_vec();
-                    local_set.spawn_local(async {
-                        match process_chunk(reader, tx, chunk, bytes_read_clone, cid_clone).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                panic!("Error reading from input: {:?}", e);
-                            }
-                        }
-                    });
-                    local_set.await;
-
+                    // Upload Object with signature
                     upload_progress.show_uploading();
-
-                    let object_cid = cid.lock().await.clone();
                     let params = PutParams {
                         key: key.as_bytes().to_vec(),
                         kind: ObjectKind::External(object_cid),
                         overwrite: *overwrite,
                     };
-                    let total_bytes = first_chunk_size as usize + *bytes_read.lock().await;
                     let response_cid = machine
                         .upload(
                             &mut signer,
@@ -177,16 +152,18 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             key.clone(),
                             object_cid,
                             rx,
-                            total_bytes,
+                            first_chunk_size as usize + bytes_read,
                             params.clone(),
                         )
                         .await?;
-
                     upload_progress.show_uploaded(response_cid.clone());
+
+                    // Verify uploaded CID with locally computed CID
                     assert!(response_cid == object_cid);
                     upload_progress.show_cid_verified();
                     upload_progress.finish();
 
+                    // Broadcast transaction with Object's CID
                     let tx = machine
                         .put(
                             &provider,
@@ -300,50 +277,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
     }
 }
 
-async fn process_chunk(
-    mut reader: impl AsyncRead + Unpin,
-    tx: Sender<Vec<u8>>,
-    first_chunk: Vec<u8>,
-    bytes_read: Arc<Mutex<usize>>,
-    cid: Arc<Mutex<Cid>>,
-) -> anyhow::Result<()> {
-    // create a tmpfile to help with CID calculation
-    let mut tmp = TempFile::new().await?;
-    let mut upload_buffer = vec![0; 10 * 1024 * 1024];
-
-    // write first chunk to temp file for CID computation
-    // and also to mpsc channel for uploading
-    tx.send(first_chunk.clone()).await.unwrap();
-    tmp.write_all(&first_chunk).await?;
-
-    // read remaining bytes from the reader into temp file and mpsc channel
-    loop {
-        match reader.read(&mut upload_buffer).await {
-            Ok(0) => {
-                break;
-            }
-            Ok(n) => {
-                if tx.send(upload_buffer[..n].to_vec()).await.is_err() {
-                    return Err(anyhow!("error sending data to channel"))?;
-                }
-                let mut bytes = bytes_read.lock().await;
-                *bytes += n;
-                tmp.write_all(&upload_buffer[..n]).await?;
-            }
-            Err(e) => {
-                return Err(e.into());
-            }
-        }
-    }
-
-    tmp.flush().await?;
-    tmp.rewind().await?;
-    let generated_cid = generate_cid(&mut tmp).await?;
-    cid.lock().await.clone_from(&generated_cid);
-
-    Ok(())
-}
-
 // === Progress Bar ===
 
 struct ObjectProgressBar {
@@ -396,96 +329,5 @@ impl ObjectProgressBar {
 
     fn finish(&self) {
         self.inner.finish_and_clear();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rand::{thread_rng, Rng};
-    use std::io::Error;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-    use tokio::io::AsyncRead;
-    use tokio::io::ReadBuf;
-    use tokio::sync::mpsc;
-
-    struct MockReader {
-        content: Vec<u8>,
-        pos: usize,
-    }
-
-    impl MockReader {
-        fn new(content: Vec<u8>) -> Self {
-            MockReader { content, pos: 0 }
-        }
-    }
-
-    impl AsyncRead for MockReader {
-        fn poll_read(
-            mut self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-            buf: &mut ReadBuf<'_>,
-        ) -> Poll<Result<(), Error>> {
-            if self.pos >= self.content.len() {
-                return Poll::Ready(Ok(()));
-            }
-            let max_len = buf.remaining();
-            let data_len = self.content.len() - self.pos;
-            let len_to_copy = std::cmp::min(max_len, data_len);
-
-            buf.put_slice(&self.content[self.pos..self.pos + len_to_copy]);
-            self.pos += len_to_copy;
-
-            Poll::Ready(Ok(()))
-        }
-    }
-
-    #[tokio::test]
-    async fn test_process_chunk() {
-        let mut rng = thread_rng();
-        let mut reader_content = vec![0u8; 1024];
-        rng.fill(&mut reader_content[..]);
-
-        let mut reader = MockReader::new(reader_content.clone());
-        let (tx, mut rx) = mpsc::channel(10);
-
-        // Read first 1024 bytes from the reader an assign it to first chunk
-        let mut first_chunk = vec![0u8; 1024];
-        reader
-            .read_exact(&mut first_chunk)
-            .await
-            .expect("Failed to read the first chunk");
-
-        let bytes_read = Arc::new(Mutex::new(0));
-        let cid = Arc::new(Mutex::new(Cid::default()));
-
-        process_chunk(
-            reader,
-            tx,
-            first_chunk.clone(),
-            bytes_read.clone(),
-            cid.clone(),
-        )
-        .await
-        .unwrap();
-
-        // Initialize an empty vector to hold the chunks received
-        let mut sent_chunks = Vec::new();
-        while let Some(chunk) = rx.recv().await {
-            sent_chunks.push(chunk);
-        }
-
-        // Verify total bytes_read (first_chunk + remaining)
-        let total_bytes = *bytes_read.lock().await;
-        assert_eq!(total_bytes + first_chunk.len(), 1024);
-
-        // Verify CID calculation in process_chunk
-        let mut tmp = TempFile::new().await.unwrap();
-        tmp.write_all(&reader_content).await.unwrap();
-        tmp.flush().await.unwrap();
-        tmp.rewind().await.unwrap();
-        let expected_cid = generate_cid(&mut tmp).await.unwrap();
-        assert_eq!(expected_cid, cid.lock().await.clone());
     }
 }
