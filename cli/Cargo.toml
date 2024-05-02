@@ -27,6 +27,8 @@ stderrlog = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
+indicatif = { workspace = true }
+console = { workspace = true }
 
 tendermint-rpc = { workspace = true }
 
