@@ -1,3 +1,6 @@
+// Copyright 2024 ADM Contributors
+// SPDX-License-Identifier: Apache-2.0, MIT
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use cid::Cid;

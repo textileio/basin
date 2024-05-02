@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use anyhow::anyhow;
+use fendermint_crypto::SecretKey;
 use fendermint_vm_message::{chain::ChainMessage, signed::Object, signed::SignedMessage};
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{
-    address::Address, crypto::signature::Signature, econ::TokenAmount, message::Message, MethodNum,
+    address::Address, chainid::ChainID, crypto::signature::Signature, econ::TokenAmount,
+    message::Message, MethodNum,
 };
 
 use adm_provider::message::GasParams;
@@ -18,6 +20,14 @@ pub struct Void {}
 impl Signer for Void {
     fn address(&self) -> Address {
         Address::new_id(0)
+    }
+
+    fn secret_key(&self) -> Option<SecretKey> {
+        None
+    }
+
+    fn chain_id(&self) -> ChainID {
+        ChainID::from(0)
     }
 
     fn transaction(

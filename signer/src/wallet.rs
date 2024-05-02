@@ -25,8 +25,8 @@ pub enum AccountKind {
 
 #[derive(Debug, Clone)]
 pub struct Wallet {
-    sk: SecretKey,
     addr: Address,
+    sk: SecretKey,
     chain_id: ChainID,
     sequence: u64, // TODO: make send + sync
 }
@@ -34,6 +34,14 @@ pub struct Wallet {
 impl Signer for Wallet {
     fn address(&self) -> Address {
         self.addr
+    }
+
+    fn secret_key(&self) -> Option<SecretKey> {
+        Some(self.sk.clone())
+    }
+
+    fn chain_id(&self) -> ChainID {
+        self.chain_id
     }
 
     fn transaction(

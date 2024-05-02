@@ -30,20 +30,22 @@ enum MachineCommands {
     Get(GetMachineArgs),
     /// List machine metadata for a specific owner.
     List(ListMachineArgs),
-    /// Interact with an object store type machine.
+    /// Interact with an object store machine.
     Objectstore(ObjectstoreArgs),
-    /// Interact with the accumulator type machine.
+    /// Interact with an accumulator machine.
     Accumulator(AccumulatorArgs),
 }
 
 #[derive(Clone, Debug, Args)]
 struct GetMachineArgs {
+    /// Machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
 }
 
 #[derive(Clone, Debug, Args)]
 struct ListMachineArgs {
+    /// Owner address.
     #[arg(short, long, value_parser = parse_address)]
     owner: Address,
 }

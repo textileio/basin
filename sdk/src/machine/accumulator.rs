@@ -97,7 +97,7 @@ where
 }
 
 pub fn decode_acc_push_return(deliver_tx: &DeliverTx) -> anyhow::Result<PushReturn> {
-    let data = decode_bytes(&deliver_tx)?;
+    let data = decode_bytes(deliver_tx)?;
     fvm_ipld_encoding::from_slice::<PushReturn>(&data)
         .map_err(|e| anyhow!("error parsing as PushReturn: {e}"))
 }

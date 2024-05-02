@@ -1,16 +1,22 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use fendermint_crypto::SecretKey;
 use fendermint_vm_message::{chain::ChainMessage, signed::Object, signed::SignedMessage};
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{
-    address::Address, crypto::signature::Signature, econ::TokenAmount, message::Message, MethodNum,
+    address::Address, chainid::ChainID, crypto::signature::Signature, econ::TokenAmount,
+    message::Message, MethodNum,
 };
 
 use adm_provider::message::GasParams;
 
 pub trait Signer: Clone + Send + Sync {
     fn address(&self) -> Address;
+
+    fn secret_key(&self) -> Option<SecretKey>;
+
+    fn chain_id(&self) -> ChainID;
 
     fn transaction(
         &mut self,

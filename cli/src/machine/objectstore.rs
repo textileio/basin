@@ -34,45 +34,45 @@ pub struct ObjectstoreArgs {
 
 #[derive(Clone, Debug, Subcommand)]
 enum ObjectstoreCommands {
-    /// Create a new object store
+    /// Create a new object store.
     Create(ObjectstoreCreateArgs),
-    /// Put an object into the object store
+    /// Put an object into the object store.
     Put(ObjectstorePutArgs),
-    /// Get an object from the object store
+    /// Get an object from the object store.
     Get(ObjectstoreGetArgs),
-    /// List objects in the object store
+    /// List objects in the object store.
     List(ObjectstoreListArgs),
 }
 
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreCreateArgs {
-    /// Allow public write access to the object store
+    /// Allow public write access to the object store.
     #[arg(long, default_value_t = false)]
     public_write: bool,
 }
 
 #[derive(Clone, Debug, Parser)]
 struct ObjectstorePutArgs {
-    /// Address of the object store        
+    /// Machine address of the object store.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
-    /// Key of the object to put
+    /// Key of the object to upload.
     #[arg(short, long)]
     key: String,
-    /// Overwrite the object if it already exists
+    /// Overwrite the object if it already exists.
     #[arg(short, long, action)]
     overwrite: bool,
-    /// Input file path to upload
+    /// Input file (or stdin) containing the object to upload.
     #[clap(default_value = "-")]
     input: FileOrStdin,
 }
 
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreGetArgs {
-    /// Address of the object store    
+    /// Machine address of the object store.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
-    /// Key of the object to get
+    /// Key of the object to get.
     #[arg(short, long)]
     key: String,
     /// Output file path for download
@@ -82,19 +82,19 @@ struct ObjectstoreGetArgs {
 
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreListArgs {
-    /// Address of the object store
+    /// Machine address of the object store.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
-    /// Prefix to filter objects
+    /// The prefix to filter objects by.
     #[arg(short, long, default_value = "")]
     prefix: String,
-    /// Delimiter to filter objects
+    /// The delimiter used to define object hierarchy.
     #[arg(short, long, default_value = "/")]
     delimiter: String,
-    /// Offset to start listing objects
+    /// The offset to start listing objects from.
     #[arg(short, long, default_value_t = 0)]
     offset: u64,
-    /// Limit to list objects
+    /// The maximum number of objects to list. '0' indicates max (10k).
     #[arg(short, long, default_value_t = 0)]
     limit: u64,
 }
@@ -152,14 +152,14 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             key.clone(),
                             object_cid,
                             rx,
-                            first_chunk_size as usize + bytes_read,
+                            first_chunk_size + bytes_read,
                             params.clone(),
                         )
                         .await?;
-                    upload_progress.show_uploaded(response_cid.clone());
+                    upload_progress.show_uploaded(response_cid);
 
                     // Verify uploaded CID with locally computed CID
-                    assert!(response_cid == object_cid);
+                    assert_eq!(response_cid, object_cid);
                     upload_progress.show_cid_verified();
                     upload_progress.finish();
 
@@ -235,6 +235,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         // since we have decided to keep the GET APIs intact for a while.
                         // If we decide to remove these APIs we can move to Object API
                         // for downloading the file with CID.
+                        // TODO (avichal): To match the put UX, can we replace output file with stdout?
+                        // TODO (avichal): ie, use `>` operator on command line? Seems more flexible.
                         let file = File::create(args.output.clone()).await?;
                         machine
                             .download(object_client, key.to_string(), file)

@@ -4,6 +4,7 @@
 use std::marker::PhantomData;
 
 use anyhow::anyhow;
+use ethers::types::TransactionReceipt;
 use fendermint_actor_machine::GET_METADATA_METHOD;
 use fendermint_vm_actor_interface::adm::{
     ListMetadataParams, Metadata, Method::ListMetadata, ADM_ACTOR_ADDR,
@@ -11,6 +12,7 @@ use fendermint_vm_actor_interface::adm::{
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{address::Address, econ::TokenAmount, METHOD_SEND};
+use ipc_provider::config::Subnet;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
@@ -21,6 +23,9 @@ use adm_provider::{
 };
 use adm_signer::Signer;
 
+use crate::ipc::manager::SubnetManager;
+
+mod ipc;
 pub mod machine;
 pub mod network;
 
@@ -31,6 +36,11 @@ pub struct TxArgs {
     pub sequence: Option<u64>,
     /// Gas params.
     pub gas_params: GasParams,
+}
+
+pub enum TxRecipient {
+    Address(Address),
+    Signer,
 }
 
 pub struct Adm<C> {
@@ -63,6 +73,34 @@ where
         let message = local_message(address, GET_METADATA_METHOD, Default::default());
         let response = provider.call(message, height, decode_metadata).await?;
         Ok(response.value)
+    }
+
+    pub async fn deposit(
+        signer: &impl Signer,
+        to: TxRecipient,
+        subnet: Subnet,
+        amount: TokenAmount,
+    ) -> anyhow::Result<TransactionReceipt> {
+        let manager = SubnetManager::new(signer, subnet)?;
+        let to = match to {
+            TxRecipient::Address(addr) => addr,
+            TxRecipient::Signer => signer.address(),
+        };
+        manager.deposit(to, amount).await
+    }
+
+    pub async fn withdraw(
+        signer: &impl Signer,
+        to: TxRecipient,
+        subnet: Subnet,
+        amount: TokenAmount,
+    ) -> anyhow::Result<TransactionReceipt> {
+        let manager = SubnetManager::new(signer, subnet)?;
+        let to = match to {
+            TxRecipient::Address(addr) => addr,
+            TxRecipient::Signer => signer.address(),
+        };
+        manager.withdraw(to, amount).await
     }
 
     pub async fn transfer(

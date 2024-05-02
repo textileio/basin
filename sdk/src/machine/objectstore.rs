@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_tempfile::TempFile;
@@ -19,13 +20,13 @@ use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::{query::FvmQueryHeight, signed::Object as MessageObject};
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::address::Address;
-use reqwest;
-use std::sync::Arc;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
-use tokio::sync::{mpsc, mpsc::Sender, Mutex};
-use tokio::task::LocalSet;
+use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt},
+    sync::{mpsc, mpsc::Sender, Mutex},
+    task::LocalSet,
+};
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use unixfs_v1::file::adder::{Chunker, FileAdder};
 
@@ -74,6 +75,7 @@ where
 }
 
 impl<C> ObjectStore<C> {
+    #[allow(clippy::too_many_arguments)]
     pub async fn upload(
         &self,
         signer: &mut impl Signer,
@@ -299,8 +301,8 @@ impl ObjectProcessor {
     }
 }
 
-/// Process the object from the reader and send it to the channel
-/// Returns the CID and the total bytes read from the reader
+/// Process the object from the reader and send it to the channel.
+/// Returns the CID and the total bytes read from the reader.
 ///
 /// Uses a LocalSet to spawn the non-Send future.
 /// This is necessary because the clap's AsyncReader impl
@@ -331,14 +333,16 @@ pub async fn process_object(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rand::{thread_rng, Rng};
     use std::io::Error;
     use std::pin::Pin;
     use std::task::{Context, Poll};
+
+    use rand::{thread_rng, Rng};
     use tokio::io::AsyncRead;
     use tokio::io::ReadBuf;
     use tokio::sync::mpsc;
+
+    use super::*;
 
     struct MockReader {
         content: Vec<u8>,
