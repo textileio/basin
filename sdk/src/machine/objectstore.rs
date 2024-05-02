@@ -1,7 +1,6 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -41,32 +40,28 @@ use adm_signer::Signer;
 use crate::machine::{deploy_machine, DeployTx, Machine};
 use crate::TxArgs;
 
-pub struct ObjectStore<C> {
+pub struct ObjectStore {
     address: Address,
-    _marker: PhantomData<C>,
 }
 
 #[async_trait]
-impl<C> Machine<C> for ObjectStore<C>
-where
-    C: Client + Send + Sync,
-{
-    async fn new(
+impl Machine for ObjectStore {
+    async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
         args: TxArgs,
-    ) -> anyhow::Result<(Self, DeployTx)> {
+    ) -> anyhow::Result<(Self, DeployTx)>
+    where
+        C: Client + Send + Sync,
+    {
         let (address, tx) =
             deploy_machine(provider, signer, Kind::ObjectStore, write_access, args).await?;
         Ok((Self::attach(address), tx))
     }
 
     fn attach(address: Address) -> Self {
-        ObjectStore {
-            address,
-            _marker: PhantomData,
-        }
+        ObjectStore { address }
     }
 
     fn address(&self) -> Address {
@@ -74,7 +69,36 @@ where
     }
 }
 
-impl<C> ObjectStore<C> {
+impl ObjectStore {
+    pub async fn put<C>(
+        &self,
+        provider: &impl Provider<C>,
+        signer: &mut impl Signer,
+        params: PutParams,
+        broadcast_mode: BroadcastMode,
+        args: TxArgs,
+    ) -> anyhow::Result<Tx<Cid>>
+    where
+        C: Client + Send + Sync,
+    {
+        let object = match &params.kind {
+            ObjectKind::Internal(_) => None,
+            ObjectKind::External(cid) => {
+                Some(MessageObject::new(params.key.clone(), *cid, self.address))
+            }
+        };
+        let params = RawBytes::serialize(params)?;
+        let message = signer.transaction(
+            self.address,
+            Default::default(),
+            PutObject as u64,
+            params,
+            object,
+            args.gas_params,
+        )?;
+        provider.perform(message, broadcast_mode, decode_cid).await
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn upload(
         &self,
@@ -113,57 +137,17 @@ impl<C> ObjectStore<C> {
         Ok(response.cid)
     }
 
-    pub async fn download(
-        &self,
-        object_client: impl ObjectService,
-        key: String,
-        writer: impl AsyncWrite + Unpin + Send + 'static,
-    ) -> anyhow::Result<()> {
-        object_client
-            .download(self.address.to_string(), key, writer)
-            .await?;
-        Ok(())
-    }
-}
-
-impl<C> ObjectStore<C>
-where
-    C: Client + Send + Sync,
-{
-    pub async fn put(
-        &self,
-        provider: &impl Provider<C>,
-        signer: &mut impl Signer,
-        params: PutParams,
-        broadcast_mode: BroadcastMode,
-        args: TxArgs,
-    ) -> anyhow::Result<Tx<Cid>> {
-        let object = match &params.kind {
-            ObjectKind::Internal(_) => None,
-            ObjectKind::External(cid) => {
-                Some(MessageObject::new(params.key.clone(), *cid, self.address))
-            }
-        };
-        let params = RawBytes::serialize(params)?;
-        let message = signer.transaction(
-            self.address,
-            Default::default(),
-            PutObject as u64,
-            params,
-            object,
-            args.gas_params,
-        )?;
-        provider.perform(message, broadcast_mode, decode_cid).await
-    }
-
-    pub async fn delete(
+    pub async fn delete<C>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         params: DeleteParams,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<Cid>> {
+    ) -> anyhow::Result<Tx<Cid>>
+    where
+        C: Client + Send + Sync,
+    {
         let params = RawBytes::serialize(params)?;
         let message = signer.transaction(
             self.address,
@@ -176,24 +160,42 @@ where
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
-    pub async fn get(
+    pub async fn get<C>(
         &self,
         provider: &impl Provider<C>,
         params: GetParams,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Option<Object>> {
+    ) -> anyhow::Result<Option<Object>>
+    where
+        C: Client + Send + Sync,
+    {
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, GetObject as u64, params);
         let response = provider.call(message, height, decode_get).await?;
         Ok(response.value)
     }
 
-    pub async fn list(
+    pub async fn download(
+        &self,
+        object_client: impl ObjectService,
+        key: String,
+        writer: impl AsyncWrite + Unpin + Send + 'static,
+    ) -> anyhow::Result<()> {
+        object_client
+            .download(self.address.to_string(), key, writer)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list<C>(
         &self,
         provider: &impl Provider<C>,
         params: ListParams,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Option<ObjectList>> {
+    ) -> anyhow::Result<Option<ObjectList>>
+    where
+        C: Client + Send + Sync,
+    {
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, ListObjects as u64, params);
         let response = provider.call(message, height, decode_list).await?;

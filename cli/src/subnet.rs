@@ -12,7 +12,6 @@ use ipc_provider::config::{
     Subnet,
 };
 use reqwest::Url;
-use tendermint_rpc::HttpClient;
 
 use adm_provider::json_rpc::JsonRpcProvider;
 use adm_sdk::{Adm, TxRecipient};
@@ -74,12 +73,8 @@ pub async fn handle_subnet(cli: Cli, args: &SubnetArgs) -> anyhow::Result<()> {
     let amount = fargs.amount.clone();
 
     let tx = match &args.command {
-        SubnetCommands::Deposit(_) => {
-            Adm::<HttpClient>::deposit(&signer, to, subnet, amount).await?
-        }
-        SubnetCommands::Withdraw(_) => {
-            Adm::<HttpClient>::withdraw(&signer, to, subnet, amount).await?
-        }
+        SubnetCommands::Deposit(_) => Adm::deposit(&signer, to, subnet, amount).await?,
+        SubnetCommands::Withdraw(_) => Adm::withdraw(&signer, to, subnet, amount).await?,
     };
 
     print_json(&serde_json::to_value(&tx)?)?;

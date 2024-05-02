@@ -1,8 +1,6 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use std::marker::PhantomData;
-
 use anyhow::anyhow;
 use ethers::types::TransactionReceipt;
 use fendermint_actor_machine::GET_METADATA_METHOD;
@@ -32,7 +30,7 @@ pub mod network;
 /// Arguments common to transactions.
 #[derive(Clone, Default, Debug)]
 pub struct TxArgs {
-    /// Sender account nonce.
+    /// Sender account sequence (nonce).
     pub sequence: Option<u64>,
     /// Gas params.
     pub gas_params: GasParams,
@@ -43,21 +41,17 @@ pub enum TxRecipient {
     Signer,
 }
 
-pub struct Adm<C> {
-    _marker: PhantomData<C>,
-}
+pub struct Adm {}
 
-impl<C> Adm<C>
-where
-    C: Client + Send + Sync,
-{
-    // TODO: Add method to fund an address in subnet
-
-    pub async fn list_machine_metadata(
+impl Adm {
+    pub async fn list_machine_metadata<C>(
         provider: &impl Provider<C>,
         owner: Address,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Vec<Metadata>> {
+    ) -> anyhow::Result<Vec<Metadata>>
+    where
+        C: Client + Send + Sync,
+    {
         let input = ListMetadataParams { owner };
         let params = RawBytes::serialize(input)?;
         let message = local_message(ADM_ACTOR_ADDR, ListMetadata as u64, params);
@@ -65,11 +59,14 @@ where
         Ok(response.value)
     }
 
-    pub async fn get_machine_metadata(
+    pub async fn get_machine_metadata<C>(
         provider: &impl Provider<C>,
         address: Address,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<fendermint_actor_machine::Metadata> {
+    ) -> anyhow::Result<fendermint_actor_machine::Metadata>
+    where
+        C: Client + Send + Sync,
+    {
         let message = local_message(address, GET_METADATA_METHOD, Default::default());
         let response = provider.call(message, height, decode_metadata).await?;
         Ok(response.value)
@@ -103,13 +100,16 @@ where
         manager.withdraw(to, amount).await
     }
 
-    pub async fn transfer(
+    pub async fn transfer<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         to: Address,
         value: TokenAmount,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<()>> {
+    ) -> anyhow::Result<Tx<()>>
+    where
+        C: Client + Send + Sync,
+    {
         let message = signer.transaction(
             to,
             value,

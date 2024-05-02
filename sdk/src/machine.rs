@@ -30,26 +30,28 @@ pub struct DeployTx {
 }
 
 #[async_trait]
-pub trait Machine<C>: Send + Sync + Sized
-where
-    C: Client + Send + Sync,
-{
-    async fn new(
+pub trait Machine: Send + Sync + Sized {
+    async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
         args: TxArgs,
-    ) -> anyhow::Result<(Self, DeployTx)>;
+    ) -> anyhow::Result<(Self, DeployTx)>
+    where
+        C: Client + Send + Sync;
 
     fn attach(address: Address) -> Self;
 
     fn address(&self) -> Address;
 
-    async fn owner(
+    async fn owner<C>(
         &self,
         provider: &impl Provider<C>,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Address> {
+    ) -> anyhow::Result<Address>
+    where
+        C: Client + Send + Sync,
+    {
         let message = local_message(self.address(), GET_METADATA_METHOD, Default::default());
         let response = provider.call(message, height, decode_metadata).await?;
         Ok(response.value.owner)

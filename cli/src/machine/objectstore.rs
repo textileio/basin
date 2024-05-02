@@ -14,10 +14,11 @@ use fvm_ipld_encoding::serde_bytes::ByteBuf;
 use fvm_shared::address::Address;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::json;
-use tendermint_rpc::HttpClient;
-use tokio::fs::File;
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc;
+use tokio::{
+    fs::File,
+    io::{self, AsyncReadExt, AsyncWriteExt},
+    sync::mpsc,
+};
 
 use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, BroadcastMode};
 use adm_sdk::machine::{objectstore, objectstore::ObjectStore, Machine};
@@ -125,7 +126,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
         }) => {
             let mut signer =
                 get_signer(&provider, cli.wallet_pk.clone(), cli.chain_name.clone()).await?;
-            let machine = ObjectStore::<HttpClient>::attach(*address);
+            let machine = ObjectStore::attach(*address);
             let mut reader = input.into_async_reader().await?;
             let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH as usize];
             let upload_progress = ObjectProgressBar::new();
@@ -204,7 +205,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
         }
         ObjectstoreCommands::Get(args) => {
             // TODO: Handle range requests
-            let machine = ObjectStore::<HttpClient>::attach(args.address);
+            let machine = ObjectStore::attach(args.address);
             let key = args.key.as_str();
             let object = machine
                 .get(
@@ -253,7 +254,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             }
         }
         ObjectstoreCommands::List(args) => {
-            let machine = ObjectStore::<HttpClient>::attach(args.address);
+            let machine = ObjectStore::attach(args.address);
             let prefix = args.prefix.as_str();
             let delimiter = args.delimiter.as_str();
             let list = machine

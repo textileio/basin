@@ -1,8 +1,6 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use std::marker::PhantomData;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -26,32 +24,28 @@ use adm_signer::Signer;
 use crate::machine::{deploy_machine, DeployTx, Machine};
 use crate::TxArgs;
 
-pub struct Accumulator<C> {
+pub struct Accumulator {
     address: Address,
-    _marker: PhantomData<C>,
 }
 
 #[async_trait]
-impl<C> Machine<C> for Accumulator<C>
-where
-    C: Client + Send + Sync,
-{
-    async fn new(
+impl Machine for Accumulator {
+    async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
         args: TxArgs,
-    ) -> anyhow::Result<(Self, DeployTx)> {
+    ) -> anyhow::Result<(Self, DeployTx)>
+    where
+        C: Client + Send + Sync,
+    {
         let (address, tx) =
             deploy_machine(provider, signer, Kind::Accumulator, write_access, args).await?;
         Ok((Self::attach(address), tx))
     }
 
     fn attach(address: Address) -> Self {
-        Accumulator {
-            address,
-            _marker: PhantomData,
-        }
+        Accumulator { address }
     }
 
     fn address(&self) -> Address {
@@ -59,18 +53,18 @@ where
     }
 }
 
-impl<C> Accumulator<C>
-where
-    C: Client + Send + Sync,
-{
-    pub async fn push(
+impl Accumulator {
+    pub async fn push<C>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         payload: Bytes,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<PushReturn>> {
+    ) -> anyhow::Result<Tx<PushReturn>>
+    where
+        C: Client + Send + Sync,
+    {
         let params = RawBytes::serialize(BytesSer(&payload))?;
         let message = signer.transaction(
             self.address,
@@ -85,11 +79,14 @@ where
             .await
     }
 
-    pub async fn root(
+    pub async fn root<C>(
         &self,
         provider: &impl Provider<C>,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Cid> {
+    ) -> anyhow::Result<Cid>
+    where
+        C: Client + Send + Sync,
+    {
         let message = local_message(self.address, Root as u64, Default::default());
         let response = provider.call(message, height, decode_cid).await?;
         Ok(response.value)

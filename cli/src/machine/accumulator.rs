@@ -9,7 +9,6 @@ use fendermint_actor_machine::WriteAccess;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
 use serde_json::json;
-use tendermint_rpc::HttpClient;
 use tokio::io::AsyncReadExt;
 
 use adm_provider::{json_rpc::JsonRpcProvider, BroadcastMode};
@@ -75,7 +74,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
         }
         AccumulatorCommands::Push(args) => {
             let mut signer = get_signer(&provider, cli.wallet_pk, cli.chain_name).await?;
-            let machine = Accumulator::<HttpClient>::attach(args.address);
+            let machine = Accumulator::attach(args.address);
 
             let mut reader = args.input.into_async_reader().await?;
             let mut buf = Vec::new();
@@ -102,7 +101,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             print_json(&tx)
         }
         AccumulatorCommands::Root(args) => {
-            let machine = Accumulator::<HttpClient>::attach(args.address);
+            let machine = Accumulator::attach(args.address);
             let root = machine.root(&provider, FvmQueryHeight::Committed).await?;
 
             print_json(&json!({"root": root.to_string()}))
