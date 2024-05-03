@@ -72,14 +72,14 @@ impl FromStr for PrettyCid {
 
 impl Display for PrettyCid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner.to_string())
+        write!(f, "{}", self.inner)
     }
 }
 
 impl<'de> Deserialize<'de> for PrettyCid {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = <&str>::deserialize(deserializer)?;
-        Ok(Self::from_str(s).map_err(|e| Error::custom(format!("{e}")))?)
+        Self::from_str(s).map_err(|e| Error::custom(format!("{e}")))
     }
 }
 

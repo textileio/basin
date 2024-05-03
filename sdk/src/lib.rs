@@ -4,9 +4,6 @@
 use anyhow::anyhow;
 use ethers::types::TransactionReceipt;
 use fendermint_actor_machine::GET_METADATA_METHOD;
-use fendermint_vm_actor_interface::adm::{
-    ListMetadataParams, Metadata, Method::ListMetadata, ADM_ACTOR_ADDR,
-};
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{address::Address, econ::TokenAmount, METHOD_SEND};
@@ -21,11 +18,12 @@ use adm_provider::{
 };
 use adm_signer::Signer;
 
-use crate::ipc::manager::SubnetManager;
+use crate::subnet::EvmManager;
 
-mod ipc;
+pub mod account;
 pub mod machine;
 pub mod network;
+mod subnet;
 
 /// Arguments common to transactions.
 #[derive(Clone, Default, Debug)]
@@ -36,29 +34,23 @@ pub struct TxArgs {
     pub gas_params: GasParams,
 }
 
-pub enum TxRecipient {
+pub enum Recipient {
     Address(Address),
     Signer,
+}
+
+impl Recipient {
+    pub fn address(&self, signer: &impl Signer) -> Address {
+        match self {
+            Recipient::Address(addr) => *addr,
+            Recipient::Signer => signer.address(),
+        }
+    }
 }
 
 pub struct Adm {}
 
 impl Adm {
-    pub async fn list_machine_metadata<C>(
-        provider: &impl Provider<C>,
-        owner: Address,
-        height: FvmQueryHeight,
-    ) -> anyhow::Result<Vec<Metadata>>
-    where
-        C: Client + Send + Sync,
-    {
-        let input = ListMetadataParams { owner };
-        let params = RawBytes::serialize(input)?;
-        let message = local_message(ADM_ACTOR_ADDR, ListMetadata as u64, params);
-        let response = provider.call(message, height, decode_list).await?;
-        Ok(response.value)
-    }
-
     pub async fn get_machine_metadata<C>(
         provider: &impl Provider<C>,
         address: Address,
@@ -74,45 +66,37 @@ impl Adm {
 
     pub async fn deposit(
         signer: &impl Signer,
-        to: TxRecipient,
+        to: Recipient,
         subnet: Subnet,
         amount: TokenAmount,
     ) -> anyhow::Result<TransactionReceipt> {
-        let manager = SubnetManager::new(signer, subnet)?;
-        let to = match to {
-            TxRecipient::Address(addr) => addr,
-            TxRecipient::Signer => signer.address(),
-        };
-        manager.deposit(to, amount).await
+        let manager = EvmManager::new(signer, subnet)?;
+        manager.deposit(to.address(signer), amount).await
     }
 
     pub async fn withdraw(
         signer: &impl Signer,
-        to: TxRecipient,
+        to: Recipient,
         subnet: Subnet,
         amount: TokenAmount,
     ) -> anyhow::Result<TransactionReceipt> {
-        let manager = SubnetManager::new(signer, subnet)?;
-        let to = match to {
-            TxRecipient::Address(addr) => addr,
-            TxRecipient::Signer => signer.address(),
-        };
-        manager.withdraw(to, amount).await
+        let manager = EvmManager::new(signer, subnet)?;
+        manager.withdraw(to.address(signer), amount).await
     }
 
     pub async fn transfer<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
-        to: Address,
-        value: TokenAmount,
+        to: Recipient,
+        amount: TokenAmount,
         args: TxArgs,
     ) -> anyhow::Result<Tx<()>>
     where
         C: Client + Send + Sync,
     {
         let message = signer.transaction(
-            to,
-            value,
+            to.address(signer),
+            amount,
             METHOD_SEND,
             RawBytes::default(),
             None,
@@ -128,10 +112,4 @@ fn decode_metadata(deliver_tx: &DeliverTx) -> anyhow::Result<fendermint_actor_ma
     let data = decode_bytes(deliver_tx)?;
     fvm_ipld_encoding::from_slice::<fendermint_actor_machine::Metadata>(&data)
         .map_err(|e| anyhow!("error parsing as Metadata: {e}"))
-}
-
-fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<Vec<Metadata>> {
-    let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<Vec<Metadata>>(&data)
-        .map_err(|e| anyhow!("error parsing as Vec<adm::Metadata>: {e}"))
 }

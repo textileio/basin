@@ -21,7 +21,10 @@ use tokio::{
 };
 
 use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, BroadcastMode};
-use adm_sdk::machine::{objectstore, objectstore::ObjectStore, Machine};
+use adm_sdk::machine::{
+    objectstore::{self, ObjectStore},
+    Machine,
+};
 
 use crate::{get_signer, parse_address, print_json, Cli};
 
@@ -175,7 +178,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         )
                         .await?;
 
-                    print_json(&tx)?;
+                    print_json(&tx)
                 }
                 Err(e) => {
                     // internal object
@@ -196,13 +199,12 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             )
                             .await?;
 
-                        print_json(&tx)?;
+                        print_json(&tx)
                     } else {
-                        return Err(e.into());
+                        Err(e.into())
                     }
                 }
             }
-            Ok(())
         }
         ObjectstoreCommands::Get(args) => {
             // TODO: Handle range requests

@@ -4,8 +4,7 @@
 use std::time::Duration;
 
 use clap::{Args, Subcommand};
-use fvm_shared::address::Address;
-use fvm_shared::econ::TokenAmount;
+use fvm_shared::{address::Address, econ::TokenAmount};
 use ipc_api::subnet_id::SubnetID;
 use ipc_provider::config::{
     subnet::{EVMSubnet, SubnetConfig},
@@ -14,7 +13,7 @@ use ipc_provider::config::{
 use reqwest::Url;
 
 use adm_provider::json_rpc::JsonRpcProvider;
-use adm_sdk::{Adm, TxRecipient};
+use adm_sdk::{Adm, Recipient};
 
 use crate::{get_signer, parse_address, parse_token_amount, print_json, Cli};
 
@@ -49,10 +48,10 @@ enum SubnetCommands {
 
 #[derive(Clone, Debug, Args)]
 pub struct FundArgs {
-    /// The deposit account address. The depositor address is used if no account is given.
+    /// The destination account address. The signer address is used if no address is given.
     #[arg(long, value_parser = parse_address)]
     pub to: Option<Address>,
-    /// The amount to deposit in FIL.
+    /// The amount in FIL.
     #[arg(value_parser = parse_token_amount)]
     pub amount: TokenAmount,
 }
@@ -68,8 +67,8 @@ pub async fn handle_subnet(cli: Cli, args: &SubnetArgs) -> anyhow::Result<()> {
     };
     let to = fargs
         .to
-        .map(TxRecipient::Address)
-        .unwrap_or(TxRecipient::Signer);
+        .map(Recipient::Address)
+        .unwrap_or(Recipient::Signer);
     let amount = fargs.amount.clone();
 
     let tx = match &args.command {
@@ -77,8 +76,7 @@ pub async fn handle_subnet(cli: Cli, args: &SubnetArgs) -> anyhow::Result<()> {
         SubnetCommands::Withdraw(_) => Adm::withdraw(&signer, to, subnet, amount).await?,
     };
 
-    print_json(&serde_json::to_value(&tx)?)?;
-    Ok(())
+    print_json(&tx)
 }
 
 /// Returns a subnet configuration from args.

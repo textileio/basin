@@ -28,8 +28,6 @@ pub struct MachineArgs {
 enum MachineCommands {
     /// Get machine info.
     Get(GetMachineArgs),
-    /// List machines by owner.
-    List(ListMachineArgs),
     /// Object store related commands.
     Objectstore(ObjectstoreArgs),
     /// Accumulator related commands.
@@ -43,13 +41,6 @@ struct GetMachineArgs {
     address: Address,
 }
 
-#[derive(Clone, Debug, Args)]
-struct ListMachineArgs {
-    /// Owner address.
-    #[arg(short, long, value_parser = parse_address)]
-    owner: Address,
-}
-
 pub async fn handle_machine(cli: Cli, args: &MachineArgs) -> anyhow::Result<()> {
     match &args.command {
         MachineCommands::Get(args) => {
@@ -61,14 +52,6 @@ pub async fn handle_machine(cli: Cli, args: &MachineArgs) -> anyhow::Result<()> 
             print_json(
                 &json!({"kind": metadata.kind.to_string(), "owner": metadata.owner.to_string()}),
             )
-        }
-        MachineCommands::List(args) => {
-            let provider = JsonRpcProvider::new_http(cli.rpc_url, None)?;
-            let metadata =
-                Adm::list_machine_metadata(&provider, args.owner, FvmQueryHeight::Committed)
-                    .await?;
-
-            print_json(&metadata)
         }
         MachineCommands::Objectstore(args) => handle_objectstore(cli, args).await,
         MachineCommands::Accumulator(args) => handle_accumulator(cli, args).await,

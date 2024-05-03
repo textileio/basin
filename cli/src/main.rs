@@ -3,7 +3,6 @@
 
 // TODO: Handle gas options
 // TODO: Handle broadcast mode options
-// TODO: Add command for Adm::transfer
 // TODO: Parse returned account addresses as EthAddress (hex)
 
 use std::str::FromStr;
@@ -22,9 +21,11 @@ use adm_provider::json_rpc::JsonRpcProvider;
 use adm_sdk::network::use_testnet_addresses;
 use adm_signer::{key::read_secret_key, AccountKind, Wallet};
 
+use crate::account::{handle_account, AccountArgs};
 use crate::machine::{handle_machine, MachineArgs};
 use crate::subnet::{handle_subnet, SubnetArgs};
 
+mod account;
 mod machine;
 mod subnet;
 
@@ -60,6 +61,9 @@ struct Cli {
 #[derive(Clone, Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum Commands {
+    /// Account related commands.
+    #[clap(alias = "accounts")]
+    Account(AccountArgs),
     /// Machine related commands.
     #[clap(alias = "machines")]
     Machine(MachineArgs),
@@ -85,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match &cli.command.clone() {
+        Commands::Account(args) => handle_account(cli, args).await,
         Commands::Machine(args) => handle_machine(cli, args).await,
         Commands::Subnet(args) => handle_subnet(cli, args).await,
     }
@@ -137,8 +142,6 @@ fn parse_token_amount(s: &str) -> Result<TokenAmount, String> {
     let nano = f64::trunc(f * (10u64.pow(FIL_AMOUNT_NANO_DIGITS) as f64));
     Ok(TokenAmount::from_nano(nano as u128))
 }
-
-// fn cid_tx
 
 /// Print serializable to stdout as pretty formatted JSON.
 fn print_json<T: Serialize>(value: &T) -> anyhow::Result<()> {

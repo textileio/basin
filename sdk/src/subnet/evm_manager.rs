@@ -25,7 +25,7 @@ use reqwest::{header::HeaderValue, Client};
 
 use adm_signer::Signer;
 
-pub type DefaultSignerMiddleware = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
+type DefaultSignerMiddleware = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 
 /// Default polling time used by the Ethers provider to check for pending
 /// transactions and events. Default is 7, and for our child subnets we
@@ -77,12 +77,12 @@ fn get_eth_signer(
     Ok(SignerMiddleware::new(provider, wallet))
 }
 
-pub struct SubnetManager {
+pub struct EvmManager {
     subnet_id: SubnetID,
     gateway: Box<GatewayManagerFacet<DefaultSignerMiddleware>>,
 }
 
-impl SubnetManager {
+impl EvmManager {
     pub fn new(signer: &impl Signer, subnet: Subnet) -> anyhow::Result<Self> {
         let subnet_id = gateway_manager_facet::SubnetID::try_from(&subnet.id)?;
         let signer = get_eth_signer(signer, &subnet)?;
@@ -146,7 +146,7 @@ impl SubnetManager {
 
 /// Receives an input `FunctionCall` and returns a new instance
 /// after estimating an optimal `gas_premium` for the transaction
-pub(crate) async fn call_with_premium_estimation<B, D, M>(
+async fn call_with_premium_estimation<B, D, M>(
     signer: Arc<DefaultSignerMiddleware>,
     call: ethers_contract::FunctionCall<B, D, M>,
 ) -> anyhow::Result<ethers_contract::FunctionCall<B, D, M>>
