@@ -1,7 +1,6 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use anyhow::anyhow;
 use bytes::Bytes;
 use clap::{Args, Subcommand};
 use clap_stdin::FileOrStdin;
@@ -14,7 +13,7 @@ use tokio::io::AsyncReadExt;
 use adm_provider::{json_rpc::JsonRpcProvider, BroadcastMode};
 use adm_sdk::machine::{accumulator::Accumulator, Machine};
 
-use crate::{get_signer, parse_address, print_json, Cli, MAX_ACC_PAYLOAD_SIZE};
+use crate::{get_signer, parse_address, print_json, Cli};
 
 #[derive(Clone, Debug, Args)]
 pub struct AccumulatorArgs {
@@ -80,13 +79,6 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             let mut buf = Vec::new();
             reader.read_to_end(&mut buf).await?;
             let payload = Bytes::from(buf);
-
-            if payload.len() > MAX_ACC_PAYLOAD_SIZE {
-                return Err(anyhow!(
-                    "max payload size is {} bytes",
-                    MAX_ACC_PAYLOAD_SIZE
-                ));
-            }
 
             let tx = machine
                 .push(

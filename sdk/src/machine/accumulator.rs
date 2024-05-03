@@ -4,7 +4,6 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
-use cid::Cid;
 use fendermint_actor_accumulator::Method::{Push, Root};
 use fendermint_actor_accumulator::PushReturn;
 use fendermint_actor_machine::WriteAccess;
@@ -16,13 +15,15 @@ use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
 use adm_provider::{
-    message::local_message, response::decode_bytes, response::decode_cid, BroadcastMode, Provider,
-    Tx,
+    message::local_message, response::decode_bytes, response::decode_cid, response::PrettyCid,
+    BroadcastMode, Provider, Tx,
 };
 use adm_signer::Signer;
 
 use crate::machine::{deploy_machine, DeployTx, Machine};
 use crate::TxArgs;
+
+const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 
 pub struct Accumulator {
     address: Address,
@@ -65,6 +66,13 @@ impl Accumulator {
     where
         C: Client + Send + Sync,
     {
+        if payload.len() > MAX_ACC_PAYLOAD_SIZE {
+            return Err(anyhow!(
+                "max payload size is {} bytes",
+                MAX_ACC_PAYLOAD_SIZE
+            ));
+        }
+
         let params = RawBytes::serialize(BytesSer(&payload))?;
         let message = signer.transaction(
             self.address,
@@ -83,7 +91,7 @@ impl Accumulator {
         &self,
         provider: &impl Provider<C>,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Cid>
+    ) -> anyhow::Result<PrettyCid>
     where
         C: Client + Send + Sync,
     {

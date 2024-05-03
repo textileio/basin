@@ -28,9 +28,6 @@ use crate::subnet::{handle_subnet, SubnetArgs};
 mod machine;
 mod subnet;
 
-// const MAX_INTERNAL_OBJECT_SIZE: usize = 1024;
-const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
-
 /// Command line args
 #[derive(Clone, Debug, Parser)]
 #[command(name = "adm", author, version, about, long_about = None)]
@@ -140,6 +137,8 @@ fn parse_token_amount(s: &str) -> Result<TokenAmount, String> {
     let nano = f64::trunc(f * (10u64.pow(FIL_AMOUNT_NANO_DIGITS) as f64));
     Ok(TokenAmount::from_nano(nano as u128))
 }
+
+// fn cid_tx
 
 /// Print serializable to stdout as pretty formatted JSON.
 fn print_json<T: Serialize>(value: &T) -> anyhow::Result<()> {

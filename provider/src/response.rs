@@ -2,11 +2,15 @@
 // Copyright 2022-2024 Protocol Labs
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::fmt::Display;
+use std::str::FromStr;
+
 use anyhow::{anyhow, Context};
 use base64::Engine;
 use bytes::Bytes;
 use cid::Cid;
 use fvm_ipld_encoding::RawBytes;
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use tendermint::abci::response::DeliverTx;
 
 /// Apply the encoding that Tendermint does to the bytes inside [`DeliverTx`].
@@ -35,7 +39,52 @@ pub fn decode_bytes(deliver_tx: &DeliverTx) -> anyhow::Result<RawBytes> {
 }
 
 /// Parse what Tendermint returns in the `data` field of [`DeliverTx`] as a [`Cid`].
-pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<Cid> {
+pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<PrettyCid> {
     let data = decode_data(&deliver_tx.data)?;
-    fvm_ipld_encoding::from_slice::<Cid>(&data).map_err(|e| anyhow!("error parsing as Cid: {e}"))
+    fvm_ipld_encoding::from_slice::<Cid>(&data)
+        .map(|c| c.into())
+        .map_err(|e| anyhow!("error parsing as Cid: {e}"))
+}
+
+/// Wrapper for [`Cid`] that is display friendly.
+#[derive(Copy, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
+pub struct PrettyCid {
+    inner: Cid,
+}
+
+impl PrettyCid {}
+
+impl From<Cid> for PrettyCid {
+    fn from(v: Cid) -> Self {
+        Self { inner: v }
+    }
+}
+
+impl FromStr for PrettyCid {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self {
+            inner: Cid::try_from(s)?,
+        })
+    }
+}
+
+impl Display for PrettyCid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for PrettyCid {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = <&str>::deserialize(deserializer)?;
+        Ok(Self::from_str(s).map_err(|e| Error::custom(format!("{e}")))?)
+    }
+}
+
+impl Serialize for PrettyCid {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_string().serialize(serializer)
+    }
 }

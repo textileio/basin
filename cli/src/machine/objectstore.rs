@@ -129,7 +129,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             let machine = ObjectStore::attach(*address);
             let mut reader = input.into_async_reader().await?;
             let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH as usize];
-            let upload_progress = ObjectProgressBar::new();
+            let upload_progress = ObjectProgressBar::new(cli.quiet);
 
             match reader.read_exact(&mut first_chunk).await {
                 Ok(first_chunk_size) => {
@@ -174,6 +174,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             Default::default(),
                         )
                         .await?;
+
                     print_json(&tx)?;
                 }
                 Err(e) => {
@@ -230,7 +231,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             return Err(anyhow!("object is not resolved"));
                         }
 
-                        let progress_bar = ObjectProgressBar::new();
+                        let progress_bar = ObjectProgressBar::new(cli.quiet);
 
                         // The `download` method is currently using /objectstore API
                         // since we have decided to keep the GET APIs intact for a while.
@@ -283,11 +284,15 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
 // === Progress Bar ===
 
 struct ObjectProgressBar {
-    inner: ProgressBar,
+    inner: Option<ProgressBar>,
 }
 
 impl ObjectProgressBar {
-    fn new() -> Self {
+    fn new(quiet: bool) -> Self {
+        if quiet {
+            return Self { inner: None };
+        }
+
         let inner = ProgressBar::new_spinner();
         let tick_style = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let template = "{spinner:.green} [{elapsed_precise}] {msg}";
@@ -298,39 +303,51 @@ impl ObjectProgressBar {
         );
         inner.enable_steady_tick(std::time::Duration::from_millis(80));
 
-        Self { inner }
+        Self { inner: Some(inner) }
     }
 
     fn show_processing(&self) {
-        self.inner
-            .println(format!("{}Processing object...", Emoji("🏗️  ", ""),));
+        if let Some(bar) = &self.inner {
+            bar.println(format!("{}  Processing object...", Emoji("⌛", "")));
+        }
     }
 
     fn show_uploading(&self) {
-        self.inner
-            .println(format!("{}Uploading object...", Emoji("📡  ", ""),));
+        if let Some(bar) = &self.inner {
+            bar.println(format!("{}  Uploading object...", Emoji("⌛", "")));
+        }
     }
 
     fn show_uploaded(&self, cid: Cid) {
-        self.inner
-            .println(format!("{}Upload complete {}", Emoji("✔️  ", ""), cid));
+        if let Some(bar) = &self.inner {
+            bar.println(format!(
+                "{}  Object uploaded (CID: {}).",
+                Emoji("✅", ""),
+                cid
+            ));
+        }
     }
 
     fn show_downloaded(&self, cid: Cid, path: String) {
-        self.inner.println(format!(
-            "{}Downloaded object {} at {}",
-            Emoji("✔️  ", ""),
-            cid,
-            path
-        ));
+        if let Some(bar) = &self.inner {
+            bar.println(format!(
+                "{}  Downloaded object {} at {}",
+                Emoji("✅", ""),
+                cid,
+                path
+            ));
+        }
     }
 
     fn show_cid_verified(&self) {
-        self.inner
-            .println(format!("{}CID verified...", Emoji("✅  ", ""),));
+        if let Some(bar) = &self.inner {
+            bar.println(format!("{}  Object verified.", Emoji("✅", "")));
+        }
     }
 
     fn finish(&self) {
-        self.inner.finish_and_clear();
+        if let Some(bar) = &self.inner {
+            bar.finish_and_clear();
+        }
     }
 }

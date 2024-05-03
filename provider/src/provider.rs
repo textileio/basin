@@ -165,6 +165,7 @@ impl FromStr for BroadcastMode {
 }
 
 #[derive(Debug, Copy, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TxStatus {
     Pending,
     Committed,

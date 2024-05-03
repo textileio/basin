@@ -32,7 +32,7 @@ use unixfs_v1::file::adder::{Chunker, FileAdder};
 use adm_provider::{
     message::{local_message, object_upload_message},
     object::ObjectService,
-    response::{decode_bytes, decode_cid},
+    response::{decode_bytes, decode_cid, PrettyCid},
     BroadcastMode, Provider, Tx,
 };
 use adm_signer::Signer;
@@ -77,7 +77,7 @@ impl ObjectStore {
         params: PutParams,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<Cid>>
+    ) -> anyhow::Result<Tx<PrettyCid>>
     where
         C: Client + Send + Sync,
     {
@@ -144,7 +144,7 @@ impl ObjectStore {
         params: DeleteParams,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<Cid>>
+    ) -> anyhow::Result<Tx<PrettyCid>>
     where
         C: Client + Send + Sync,
     {

@@ -26,13 +26,13 @@ pub struct MachineArgs {
 
 #[derive(Clone, Debug, Subcommand)]
 enum MachineCommands {
-    /// Get machine metadata at a specific address.
+    /// Get machine info.
     Get(GetMachineArgs),
-    /// List machine metadata for a specific owner.
+    /// List machines by owner.
     List(ListMachineArgs),
-    /// Interact with an object store machine.
+    /// Object store related commands.
     Objectstore(ObjectstoreArgs),
-    /// Interact with an accumulator machine.
+    /// Accumulator related commands.
     Accumulator(AccumulatorArgs),
 }
 
