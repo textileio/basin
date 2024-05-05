@@ -12,6 +12,7 @@ version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+fnv = { workspace = true }
 hex = { workspace = true }
 
 fvm_ipld_encoding = { workspace = true }
@@ -20,5 +21,7 @@ fvm_shared = { workspace = true }
 fendermint_crypto = { workspace = true }
 fendermint_vm_actor_interface = { workspace = true }
 fendermint_vm_message = { workspace = true }
+
+ipc-api = { workspace = true }
 
 adm_provider = { path = "../provider" }

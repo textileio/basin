@@ -6,28 +6,36 @@ use fendermint_crypto::SecretKey;
 use fendermint_vm_message::{chain::ChainMessage, signed::Object, signed::SignedMessage};
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{
-    address::Address, chainid::ChainID, crypto::signature::Signature, econ::TokenAmount,
-    message::Message, MethodNum,
+    address::Address, crypto::signature::Signature, econ::TokenAmount, message::Message, MethodNum,
 };
 
 use adm_provider::message::GasParams;
 
 use crate::signer::Signer;
+use crate::SubnetID;
 
-#[derive(Clone)]
-pub struct Void {}
+#[derive(Clone, Debug)]
+pub struct Void {
+    address: Address,
+}
+
+impl Void {
+    pub fn new(address: Address) -> Self {
+        Self { address }
+    }
+}
 
 impl Signer for Void {
     fn address(&self) -> Address {
-        Address::new_id(0)
+        self.address
     }
 
     fn secret_key(&self) -> Option<SecretKey> {
         None
     }
 
-    fn chain_id(&self) -> ChainID {
-        ChainID::from(0)
+    fn subnet_id(&self) -> Option<SubnetID> {
+        None
     }
 
     fn transaction(

@@ -6,5 +6,6 @@ pub mod message;
 pub mod object;
 mod provider;
 pub mod response;
+pub mod util;
 
 pub use provider::*;

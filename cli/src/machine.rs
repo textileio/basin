@@ -2,18 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use clap::{Args, Subcommand};
+use ethers::utils::hex::ToHexExt;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
 use serde_json::json;
 
-use adm_provider::json_rpc::JsonRpcProvider;
-use adm_sdk::Adm;
+use adm_provider::{
+    json_rpc::JsonRpcProvider,
+    util::{get_delegated_address, parse_address},
+};
+use adm_sdk::machine::DefaultMachine;
 
 use crate::machine::{
     accumulator::{handle_accumulator, AccumulatorArgs},
     objectstore::{handle_objectstore, ObjectstoreArgs},
 };
-use crate::{parse_address, print_json, Cli};
+use crate::{get_rpc_url, print_json, Cli};
 
 pub mod accumulator;
 pub mod objectstore;
@@ -44,14 +48,13 @@ struct GetMachineArgs {
 pub async fn handle_machine(cli: Cli, args: &MachineArgs) -> anyhow::Result<()> {
     match &args.command {
         MachineCommands::Get(args) => {
-            let provider = JsonRpcProvider::new_http(cli.rpc_url, None)?;
+            let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
             let metadata =
-                Adm::get_machine_metadata(&provider, args.address, FvmQueryHeight::Committed)
+                DefaultMachine::metadata(&provider, args.address, FvmQueryHeight::Committed)
                     .await?;
 
-            print_json(
-                &json!({"kind": metadata.kind.to_string(), "owner": metadata.owner.to_string()}),
-            )
+            let owner = get_delegated_address(metadata.owner)?.encode_hex_with_prefix();
+            print_json(&json!({"kind": metadata.kind, "owner": owner}))
         }
         MachineCommands::Objectstore(args) => handle_objectstore(cli, args).await,
         MachineCommands::Accumulator(args) => handle_accumulator(cli, args).await,

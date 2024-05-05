@@ -15,11 +15,12 @@ use ethers::{
     types::TransactionReceipt,
 };
 use ethers_contract::ContractCall;
-use fvm_shared::{address::Address, econ::TokenAmount};
+use fendermint_crypto::SecretKey;
+use fvm_shared::{address::Address, chainid::ChainID, econ::TokenAmount};
 use gateway_manager_facet::{FvmAddress, GatewayManagerFacet, SubnetID};
 use ipc_actors_abis::gateway_manager_facet;
 use ipc_api::evm::payload_to_evm_address;
-use ipc_provider::config::{subnet::SubnetConfig, Subnet};
+use ipc_provider::config::subnet::EVMSubnet;
 use num_traits::ToPrimitive;
 use reqwest::{header::HeaderValue, Client};
 
@@ -41,11 +42,12 @@ const ETH_PROVIDER_POLLING_TIME: Duration = Duration::from_secs(1);
 const TRANSACTION_RECEIPT_RETRIES: usize = 200;
 
 fn get_eth_signer(
-    signer: &impl Signer,
-    subnet: &Subnet,
+    secret_key: SecretKey,
+    chain_id: ChainID,
+    subnet: &EVMSubnet,
 ) -> anyhow::Result<DefaultSignerMiddleware> {
-    let url = subnet.rpc_http().clone();
-    let auth_token = subnet.auth_token();
+    let url = subnet.provider_http.clone();
+    let auth_token = subnet.auth_token.clone();
 
     let mut client = Client::builder();
     if let Some(auth_token) = auth_token {
@@ -56,23 +58,17 @@ fn get_eth_signer(
         headers.insert(reqwest::header::AUTHORIZATION, auth_value);
         client = client.default_headers(headers);
     }
-    if let Some(timeout) = subnet.rpc_timeout() {
+    if let Some(timeout) = subnet.provider_timeout {
         client = client.timeout(timeout);
     }
     let client = client.build()?;
 
     let provider = Http::new_with_client(url, client);
     let mut provider = Provider::new(provider);
-    // set polling interval for provider to fit fast child subnets block times.
-    // TODO: We may want to make it dynamic so it adjusts depending on the type of network
-    // so we don't have a too slow or too fast polling for the underlying block times.
     provider.set_interval(ETH_PROVIDER_POLLING_TIME);
 
-    let sk = match signer.secret_key() {
-        Some(sk) => sk.serialize(),
-        None => return Err(anyhow!("signer does not expose secret key")),
-    };
-    let wallet = LocalWallet::from_bytes(sk.as_slice())?.with_chain_id(signer.chain_id());
+    let sk = secret_key.serialize();
+    let wallet = LocalWallet::from_bytes(sk.as_slice())?.with_chain_id(chain_id);
 
     Ok(SignerMiddleware::new(provider, wallet))
 }
@@ -83,11 +79,20 @@ pub struct EvmManager {
 }
 
 impl EvmManager {
-    pub fn new(signer: &impl Signer, subnet: Subnet) -> anyhow::Result<Self> {
-        let subnet_id = gateway_manager_facet::SubnetID::try_from(&subnet.id)?;
-        let signer = get_eth_signer(signer, &subnet)?;
-        let SubnetConfig::Fevm(config) = &subnet.config;
-        let address = payload_to_evm_address(config.gateway_addr.payload())?;
+    pub fn new(signer: &impl Signer, subnet: EVMSubnet) -> anyhow::Result<Self> {
+        let sk = match signer.secret_key() {
+            Some(sk) => sk,
+            None => return Err(anyhow!("signer does not have secret key")),
+        };
+        let subnet_id = match signer.subnet_id() {
+            Some(subnet_id) => subnet_id,
+            None => return Err(anyhow!("failed to get subnet ID from signer")),
+        };
+        let chain_id = subnet_id.parent()?.chain_id();
+        let subnet_id = gateway_manager_facet::SubnetID::try_from(&subnet_id.inner())?;
+
+        let signer = get_eth_signer(sk, chain_id, &subnet)?;
+        let address = payload_to_evm_address(subnet.gateway_addr.payload())?;
         let gateway = GatewayManagerFacet::new(address, Arc::new(signer));
         Ok(Self {
             subnet_id,

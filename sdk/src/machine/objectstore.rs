@@ -18,7 +18,7 @@ use fendermint_actor_objectstore::{
 use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::{query::FvmQueryHeight, signed::Object as MessageObject};
 use fvm_ipld_encoding::RawBytes;
-use fvm_shared::address::Address;
+use fvm_shared::{address::Address, chainid::ChainID};
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 use tokio::{
@@ -106,22 +106,23 @@ impl ObjectStore {
         object_client: impl ObjectService,
         key: String,
         cid: Cid,
-        rx: mpsc::Receiver<Vec<u8>>,
         size: usize,
-        params: PutParams,
+        overwrite: bool,
+        chain_id: ChainID,
+        rx: mpsc::Receiver<Vec<u8>>,
     ) -> anyhow::Result<Cid> {
         let from = signer.address();
+        let key = key.as_bytes().to_vec();
+        let params = PutParams {
+            key: key.clone(),
+            kind: ObjectKind::External(cid),
+            overwrite,
+        };
         let serialized_params = RawBytes::serialize(params)?;
         let message =
             object_upload_message(from, self.address, PutObject as u64, serialized_params);
-        let singed_message = signer.sign_message(
-            message,
-            Some(MessageObject::new(
-                key.as_bytes().to_vec(),
-                cid,
-                self.address,
-            )),
-        )?;
+        let singed_message =
+            signer.sign_message(message, Some(MessageObject::new(key, cid, self.address)))?;
         let serialized_signed_message = fvm_ipld_encoding::to_vec(&singed_message)?;
 
         let object_stream = ReceiverStream::new(rx)
@@ -132,6 +133,7 @@ impl ObjectStore {
                 body,
                 size,
                 general_purpose::URL_SAFE.encode(&serialized_signed_message),
+                chain_id.into(),
             )
             .await?;
         Ok(response.cid)

@@ -8,25 +8,29 @@ use clap_stdin::FileOrStdin;
 use console::Emoji;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_actor_objectstore::{GetParams, ListParams, Object, ObjectKind, PutParams};
-use fendermint_vm_core::chainid;
+use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::serde_bytes::ByteBuf;
 use fvm_shared::address::Address;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::json;
+use tendermint_rpc::Url;
 use tokio::{
     fs::File,
     io::{self, AsyncReadExt, AsyncWriteExt},
     sync::mpsc,
 };
 
-use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, BroadcastMode};
+use adm_provider::{
+    json_rpc::JsonRpcProvider, object::ObjectClient, util::parse_address, BroadcastMode,
+};
 use adm_sdk::machine::{
     objectstore::{self, ObjectStore},
     Machine,
 };
+use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
-use crate::{get_signer, parse_address, print_json, Cli};
+use crate::{get_rpc_url, get_subnet_id, print_json, Cli};
 
 const MAX_INTERNAL_OBJECT_LENGTH: u64 = 1024;
 
@@ -50,6 +54,9 @@ enum ObjectstoreCommands {
 
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreCreateArgs {
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: SecretKey,
     /// Allow public write access to the object store.
     #[arg(long, default_value_t = false)]
     public_write: bool,
@@ -57,6 +64,12 @@ struct ObjectstoreCreateArgs {
 
 #[derive(Clone, Debug, Parser)]
 struct ObjectstorePutArgs {
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: SecretKey,
+    /// Node Object API URL.
+    #[arg(long, env, default_value = "http://127.0.0.1:8001")]
+    object_api_url: Url,
     /// Machine address of the object store.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
@@ -73,6 +86,9 @@ struct ObjectstorePutArgs {
 
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreGetArgs {
+    /// Node Object API URL.
+    #[arg(long, env, default_value = "http://127.0.0.1:8001")]
+    object_api_url: Url,
     /// Machine address of the object store.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
@@ -104,13 +120,15 @@ struct ObjectstoreListArgs {
 }
 
 pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Result<()> {
-    let provider = JsonRpcProvider::new_http(cli.rpc_url, None)?;
-    let chain_id = chainid::from_str_hashed(&cli.chain_name)?;
-    let object_client = ObjectClient::new(cli.object_api_url, u64::from(chain_id));
+    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
+    let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
         ObjectstoreCommands::Create(args) => {
-            let mut signer = get_signer(&provider, cli.wallet_pk, cli.chain_name).await?;
+            let mut signer =
+                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+            signer.init_sequence(&provider).await?;
+
             let write_access = if args.public_write {
                 WriteAccess::Public
             } else {
@@ -122,16 +140,26 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
         ObjectstoreCommands::Put(ObjectstorePutArgs {
+            private_key,
+            object_api_url,
             key,
             address,
             overwrite,
             input,
         }) => {
-            let mut signer =
-                get_signer(&provider, cli.wallet_pk.clone(), cli.chain_name.clone()).await?;
+            let mut signer = Wallet::new_secp256k1(
+                private_key.clone(),
+                AccountKind::Ethereum,
+                subnet_id.clone(),
+            )?;
+            signer.init_sequence(&provider).await?;
+
             let machine = ObjectStore::attach(*address);
+            let object_client = ObjectClient::new(object_api_url.clone());
+
             let mut reader = input.into_async_reader().await?;
             let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH as usize];
+
             let upload_progress = ObjectProgressBar::new(cli.quiet);
 
             match reader.read_exact(&mut first_chunk).await {
@@ -144,20 +172,16 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
 
                     // Upload Object with signature
                     upload_progress.show_uploading();
-                    let params = PutParams {
-                        key: key.as_bytes().to_vec(),
-                        kind: ObjectKind::External(object_cid),
-                        overwrite: *overwrite,
-                    };
                     let response_cid = machine
                         .upload(
                             &mut signer,
                             object_client,
                             key.clone(),
                             object_cid,
-                            rx,
                             first_chunk_size + bytes_read,
-                            params.clone(),
+                            *overwrite,
+                            subnet_id.chain_id(),
+                            rx,
                         )
                         .await?;
                     upload_progress.show_uploaded(response_cid);
@@ -168,6 +192,11 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     upload_progress.finish();
 
                     // Broadcast transaction with Object's CID
+                    let params = PutParams {
+                        key: key.as_bytes().to_vec(),
+                        kind: ObjectKind::External(object_cid),
+                        overwrite: *overwrite,
+                    };
                     let tx = machine
                         .put(
                             &provider,
@@ -209,6 +238,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
         ObjectstoreCommands::Get(args) => {
             // TODO: Handle range requests
             let machine = ObjectStore::attach(args.address);
+
             let key = args.key.as_str();
             let object = machine
                 .get(
@@ -232,6 +262,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         if !resolved {
                             return Err(anyhow!("object is not resolved"));
                         }
+
+                        let object_client = ObjectClient::new(args.object_api_url.clone());
 
                         let progress_bar = ObjectProgressBar::new(cli.quiet);
 
@@ -258,6 +290,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
         }
         ObjectstoreCommands::List(args) => {
             let machine = ObjectStore::attach(args.address);
+
             let prefix = args.prefix.as_str();
             let delimiter = args.delimiter.as_str();
             let list = machine

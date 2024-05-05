@@ -3,31 +3,28 @@
 
 // TODO: Handle gas options
 // TODO: Handle broadcast mode options
-// TODO: Parse returned account addresses as EthAddress (hex)
 
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use clap::{Parser, Subcommand};
-use fendermint_vm_core::chainid;
-use fvm_shared::address::{Address, Error, Network};
-use fvm_shared::econ::TokenAmount;
-use ipc_api::ethers_address_to_fil_address;
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use fvm_shared::address::Address;
 use serde::Serialize;
 use stderrlog::Timestamp;
 use tendermint_rpc::Url;
 
-use adm_provider::json_rpc::JsonRpcProvider;
-use adm_sdk::network::use_testnet_addresses;
-use adm_signer::{key::read_secret_key, AccountKind, Wallet};
+use adm_provider::util::parse_address;
+use adm_sdk::network::{
+    use_testnet_addresses, DEVNET_RPC_URL, DEVNET_SUBNET_ID, TESTNET_PARENT_GATEWAY_ADDRESS,
+    TESTNET_PARENT_REGISTRY_ADDRESS, TESTNET_PARENT_URL, TESTNET_RPC_URL, TESTNET_SUBNET_ID,
+};
+use adm_signer::SubnetID;
 
 use crate::account::{handle_account, AccountArgs};
 use crate::machine::{handle_machine, MachineArgs};
-use crate::subnet::{handle_subnet, SubnetArgs};
 
 mod account;
 mod machine;
-mod subnet;
 
 /// Command line args
 #[derive(Clone, Debug, Parser)]
@@ -35,21 +32,15 @@ mod subnet;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Network presets for subnet and rpc_url.
+    #[arg(long, value_enum, env, default_value_t = Network::Testnet)]
+    network: Network,
+    /// The ID of the target subnet. If not present, a value derived from the network flag is used.
+    #[arg(short, long, env)]
+    subnet: Option<SubnetID>,
     /// Node CometBFT RPC URL.
-    #[arg(long, env, default_value = "http://127.0.0.1:26657")]
-    rpc_url: Url,
-    /// Node Object API URL.
-    #[arg(long, env, default_value = "http://127.0.0.1:8001")]
-    object_api_url: Url,
-    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
     #[arg(long, env)]
-    wallet_pk: Option<String>,
-    /// IPC subnet chain name.
-    #[arg(long, env, default_value = "test")]
-    chain_name: String,
-    /// Use testnet addresses (default is 'true' pre-mainnet).
-    #[arg(long, env, default_value_t = true)]
-    testnet: bool,
+    rpc_url: Option<Url>,
     /// Logging verbosity (repeat for more verbose logging).
     #[arg(short, long, env, action = clap::ArgAction::Count)]
     verbosity: u8,
@@ -67,9 +58,72 @@ enum Commands {
     /// Machine related commands.
     #[clap(alias = "machines")]
     Machine(MachineArgs),
-    /// Subnet related commands.
-    #[clap(alias = "subnets")]
-    Subnet(SubnetArgs),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Network {
+    /// Network presets for mainnet.
+    Mainnet,
+    /// Network presets for Calibration (default pre-mainnet).
+    Testnet,
+    /// Network presets for local development.
+    Devnet,
+}
+
+impl Network {
+    fn subnet(&self) -> anyhow::Result<SubnetID> {
+        match self {
+            Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
+            Network::Testnet => Ok(SubnetID::from_str(TESTNET_SUBNET_ID)?),
+            Network::Devnet => Ok(SubnetID::from_str(DEVNET_SUBNET_ID)?),
+        }
+    }
+
+    fn rpc_url(&self) -> anyhow::Result<Url> {
+        match self {
+            Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
+            Network::Testnet => Ok(Url::from_str(TESTNET_RPC_URL)?),
+            Network::Devnet => Ok(Url::from_str(DEVNET_RPC_URL)?),
+        }
+    }
+
+    fn parent_url(&self) -> anyhow::Result<reqwest::Url> {
+        match self {
+            Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
+            Network::Testnet => Ok(reqwest::Url::from_str(TESTNET_PARENT_URL)?),
+            Network::Devnet => Err(anyhow!("network has no parent")),
+        }
+    }
+
+    fn parent_gateway(&self) -> anyhow::Result<Address> {
+        match self {
+            Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
+            Network::Testnet => Ok(parse_address(TESTNET_PARENT_GATEWAY_ADDRESS)?),
+            Network::Devnet => Err(anyhow!("network has no parent")),
+        }
+    }
+
+    fn parent_registry(&self) -> anyhow::Result<Address> {
+        match self {
+            Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
+            Network::Testnet => Ok(parse_address(TESTNET_PARENT_REGISTRY_ADDRESS)?),
+            Network::Devnet => Err(anyhow!("network has no parent")),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Args)]
+#[group(required = true, multiple = false)]
+pub struct NetworkArgs {
+    /// Used for mainnet.
+    #[arg(long, env)]
+    mainnet: bool,
+    /// Used for Calibration (default is 'true' pre-mainnet).
+    #[arg(long, env, default_value_t = true)]
+    testnet: bool,
+    /// Used for local development.
+    #[arg(long, env)]
+    devnet: bool,
 }
 
 #[tokio::main]
@@ -84,63 +138,33 @@ async fn main() -> anyhow::Result<()> {
         .init()
         .unwrap();
 
-    if cli.testnet {
-        use_testnet_addresses()
+    match cli.network {
+        Network::Testnet | Network::Devnet => use_testnet_addresses(),
+        _ => {}
     }
 
     match &cli.command.clone() {
         Commands::Account(args) => handle_account(cli, args).await,
         Commands::Machine(args) => handle_machine(cli, args).await,
-        Commands::Subnet(args) => handle_subnet(cli, args).await,
     }
 }
 
-/// Returns a wallet instance from a private key and chain name.
-///
-/// This method will fetch the current nonce for the associated address account.
-async fn get_signer(
-    provider: &JsonRpcProvider,
-    pk: Option<String>,
-    chain_name: String,
-) -> anyhow::Result<Wallet> {
-    if let Some(pk) = pk {
-        let chain_id = chainid::from_str_hashed(&chain_name)?;
-        let sk = read_secret_key(&pk)?;
-        let mut wallet = Wallet::new_secp256k1(sk, AccountKind::Ethereum, chain_id)?;
-        wallet.init_sequence(provider).await?;
-        Ok(wallet)
+/// Returns subnet ID from the override or network preset.
+fn get_subnet_id(cli: &Cli) -> anyhow::Result<SubnetID> {
+    if let Some(subnet) = cli.subnet.clone() {
+        Ok(subnet)
     } else {
-        Err(anyhow!(
-            "--wallet-pk <WALLET_PK> is required to sign transactions"
-        ))
+        cli.network.subnet()
     }
 }
 
-/// Clap parser for f/eth-address.
-fn parse_address(s: &str) -> Result<Address, String> {
-    let addr = Network::Mainnet
-        .parse_address(s)
-        .or_else(|e| match e {
-            Error::UnknownNetwork => Network::Testnet.parse_address(s),
-            _ => Err(e),
-        })
-        .or_else(|_| {
-            let addr = ethers::types::Address::from_str(s)?;
-            ethers_address_to_fil_address(&addr)
-        })
-        .map_err(|e| format!("{}", e))?;
-    Ok(addr)
-}
-
-/// We only support up to 9 decimal digits for transaction.
-const FIL_AMOUNT_NANO_DIGITS: u32 = 9;
-
-/// Clap parser for token amount.
-fn parse_token_amount(s: &str) -> Result<TokenAmount, String> {
-    let f: f64 = s.parse().map_err(|e| format!("{}", e))?;
-    // no rounding, just the integer part
-    let nano = f64::trunc(f * (10u64.pow(FIL_AMOUNT_NANO_DIGITS) as f64));
-    Ok(TokenAmount::from_nano(nano as u128))
+/// Returns rpc url from the override or network preset.
+fn get_rpc_url(cli: &Cli) -> anyhow::Result<Url> {
+    if let Some(url) = cli.rpc_url.clone() {
+        Ok(url)
+    } else {
+        cli.network.rpc_url()
+    }
 }
 
 /// Print serializable to stdout as pretty formatted JSON.
