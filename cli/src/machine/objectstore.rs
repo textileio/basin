@@ -7,13 +7,15 @@ use clap::{Args, Parser, Subcommand};
 use clap_stdin::FileOrStdin;
 use console::Emoji;
 use fendermint_actor_machine::WriteAccess;
-use fendermint_actor_objectstore::{GetParams, ListParams, Object, ObjectKind, PutParams};
+use fendermint_actor_objectstore::{
+    GetParams, ListParams, Object, ObjectKind, ObjectListItem, PutParams,
+};
 use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::serde_bytes::ByteBuf;
 use fvm_shared::address::Address;
 use indicatif::{ProgressBar, ProgressStyle};
-use serde_json::json;
+use serde_json::{json, Value};
 use tendermint_rpc::Url;
 use tokio::{
     fs::File,
@@ -111,7 +113,7 @@ struct ObjectstoreListArgs {
     /// The delimiter used to define object hierarchy.
     #[arg(short, long, default_value = "/")]
     delimiter: String,
-    /// The offset to start listing objects from.
+    /// The offset from which to start listing objects.
     #[arg(short, long, default_value_t = 0)]
     offset: u64,
     /// The maximum number of objects to list. '0' indicates max (10k).
@@ -312,13 +314,32 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     FvmQueryHeight::Committed,
                 )
                 .await?;
-            // TODO: ObjectList doesn't need to return as an Option. We can change this in the actor.
 
-            if let Some(list) = list {
-                print_json(&list)
-            } else {
-                Err(anyhow!("object list not found for prefix '{}'", prefix))
-            }
+            // TODO: ObjectList doesn't need to return as an Option. We can change this in the actor.
+            let list = list.unwrap_or_default();
+
+            let objects = list
+                .objects
+                .iter()
+                .map(|v| {
+                    let key = core::str::from_utf8(&v.0).unwrap_or_default().to_string();
+                    match &v.1 {
+                        ObjectListItem::Internal((cid, size)) => {
+                            json!({"key": key, "value": json!({"kind": "internal", "content": cid.to_string(), "size": size})})
+                        }
+                        ObjectListItem::External((cid, resolved)) => {
+                            json!({"key": key, "value": json!({"kind": "external", "content": cid.to_string(), "resolved": resolved})})
+                        }
+                    }
+                })
+                .collect::<Vec<Value>>();
+            let common_prefixes = list
+                .common_prefixes
+                .iter()
+                .map(|v| Value::String(core::str::from_utf8(v).unwrap_or_default().to_string()))
+                .collect::<Vec<Value>>();
+
+            print_json(&json!({"objects": objects, "common_prefixes": common_prefixes}))
         }
     }
 }
