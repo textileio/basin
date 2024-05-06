@@ -15,7 +15,7 @@ use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
 use adm_provider::{
-    message::local_message, response::decode_bytes, response::decode_cid, response::PrettyCid,
+    message::local_message, response::decode_bytes, response::decode_cid, response::Cid,
     BroadcastMode, Provider, QueryProvider, Tx,
 };
 use adm_signer::Signer;
@@ -28,7 +28,7 @@ const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 /// Pretty version of [`fendermint_actor_accumulator::PushReturn`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PushReturn {
-    pub root: PrettyCid,
+    pub root: Cid,
     pub index: u64,
 }
 
@@ -107,7 +107,7 @@ impl Accumulator {
         &self,
         provider: &impl QueryProvider,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<PrettyCid> {
+    ) -> anyhow::Result<Cid> {
         let message = local_message(self.address, Root as u64, Default::default());
         let response = provider.call(message, height, decode_cid).await?;
         Ok(response.value)

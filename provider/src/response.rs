@@ -8,7 +8,6 @@ use std::str::FromStr;
 use anyhow::{anyhow, Context};
 use base64::Engine;
 use bytes::Bytes;
-use cid::Cid;
 use fvm_ipld_encoding::RawBytes;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use tendermint::abci::response::DeliverTx;
@@ -39,51 +38,51 @@ pub fn decode_bytes(deliver_tx: &DeliverTx) -> anyhow::Result<RawBytes> {
 }
 
 /// Parse what Tendermint returns in the `data` field of [`DeliverTx`] as a [`Cid`].
-pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<PrettyCid> {
+pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<Cid> {
     let data = decode_data(&deliver_tx.data)?;
-    fvm_ipld_encoding::from_slice::<Cid>(&data)
+    fvm_ipld_encoding::from_slice::<cid::Cid>(&data)
         .map(|c| c.into())
         .map_err(|e| anyhow!("error parsing as Cid: {e}"))
 }
 
-/// Wrapper for [`Cid`] that is display friendly.
+/// Wrapper for [`cid::Cid`] that is display friendly.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PrettyCid {
-    inner: Cid,
+pub struct Cid {
+    inner: cid::Cid,
 }
 
-impl PrettyCid {}
+impl Cid {}
 
-impl From<Cid> for PrettyCid {
-    fn from(v: Cid) -> Self {
+impl From<cid::Cid> for Cid {
+    fn from(v: cid::Cid) -> Self {
         Self { inner: v }
     }
 }
 
-impl FromStr for PrettyCid {
+impl FromStr for Cid {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self {
-            inner: Cid::try_from(s)?,
+            inner: cid::Cid::try_from(s)?,
         })
     }
 }
 
-impl Display for PrettyCid {
+impl Display for Cid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
 
-impl<'de> Deserialize<'de> for PrettyCid {
+impl<'de> Deserialize<'de> for Cid {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = <&str>::deserialize(deserializer)?;
         Self::from_str(s).map_err(|e| Error::custom(format!("{e}")))
     }
 }
 
-impl Serialize for PrettyCid {
+impl Serialize for Cid {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.to_string().serialize(serializer)
     }
