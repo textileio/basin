@@ -15,16 +15,15 @@ use ethers::{
     types::TransactionReceipt,
 };
 use ethers_contract::ContractCall;
-use fendermint_crypto::SecretKey;
-use fvm_shared::{address::Address, chainid::ChainID, econ::TokenAmount};
-use gateway_manager_facet::{FvmAddress, GatewayManagerFacet, SubnetID};
+use fvm_shared::{address::Address, econ::TokenAmount};
+use gateway_manager_facet::{FvmAddress, GatewayManagerFacet, SubnetID as GatewaySubnetID};
 use ipc_actors_abis::gateway_manager_facet;
 use ipc_api::evm::payload_to_evm_address;
 use ipc_provider::config::subnet::EVMSubnet;
 use num_traits::ToPrimitive;
 use reqwest::{header::HeaderValue, Client};
 
-use adm_signer::Signer;
+use adm_signer::{Signer, SubnetID};
 
 type DefaultSignerMiddleware = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 
@@ -41,11 +40,7 @@ const ETH_PROVIDER_POLLING_TIME: Duration = Duration::from_secs(1);
 /// roots (like Calibration and mainnet).
 const TRANSACTION_RECEIPT_RETRIES: usize = 200;
 
-fn get_eth_signer(
-    secret_key: SecretKey,
-    chain_id: ChainID,
-    subnet: &EVMSubnet,
-) -> anyhow::Result<DefaultSignerMiddleware> {
+fn get_eth_provider(subnet: &EVMSubnet) -> anyhow::Result<Provider<Http>> {
     let url = subnet.provider_http.clone();
     let auth_token = subnet.auth_token.clone();
 
@@ -67,85 +62,114 @@ fn get_eth_signer(
     let mut provider = Provider::new(provider);
     provider.set_interval(ETH_PROVIDER_POLLING_TIME);
 
+    Ok(provider)
+}
+
+fn get_eth_signer(
+    signer: &impl Signer,
+    subnet: &EVMSubnet,
+) -> anyhow::Result<DefaultSignerMiddleware> {
+    let provider = get_eth_provider(subnet)?;
+
+    let secret_key = match signer.secret_key() {
+        Some(sk) => sk,
+        None => return Err(anyhow!("failed to get secret key from signer")),
+    };
+
+    let subnet_id = get_subnet_id(signer)?;
+    let chain_id = subnet_id.chain_id();
+
     let sk = secret_key.serialize();
     let wallet = LocalWallet::from_bytes(sk.as_slice())?.with_chain_id(chain_id);
 
     Ok(SignerMiddleware::new(provider, wallet))
 }
 
-pub struct EvmManager {
-    subnet_id: SubnetID,
-    gateway: Box<GatewayManagerFacet<DefaultSignerMiddleware>>,
+fn get_subnet_id(signer: &impl Signer) -> anyhow::Result<SubnetID> {
+    match signer.subnet_id() {
+        Some(subnet_id) => Ok(subnet_id),
+        None => Err(anyhow!("failed to get subnet ID from signer")),
+    }
 }
 
-impl EvmManager {
-    pub fn new(signer: &impl Signer, subnet: EVMSubnet) -> anyhow::Result<Self> {
-        let sk = match signer.secret_key() {
-            Some(sk) => sk,
-            None => return Err(anyhow!("signer does not have secret key")),
-        };
-        let subnet_id = match signer.subnet_id() {
-            Some(subnet_id) => subnet_id,
-            None => return Err(anyhow!("failed to get subnet ID from signer")),
-        };
-        let chain_id = subnet_id.parent()?.chain_id();
-        let subnet_id = gateway_manager_facet::SubnetID::try_from(&subnet_id.inner())?;
+fn get_gateway(
+    signer: &impl Signer,
+    subnet: &EVMSubnet,
+) -> anyhow::Result<Box<GatewayManagerFacet<DefaultSignerMiddleware>>> {
+    let address = payload_to_evm_address(subnet.gateway_addr.payload())?;
+    let signer = get_eth_signer(signer, subnet)?;
 
-        let signer = get_eth_signer(sk, chain_id, &subnet)?;
-        let address = payload_to_evm_address(subnet.gateway_addr.payload())?;
-        let gateway = GatewayManagerFacet::new(address, Arc::new(signer));
-        Ok(Self {
-            subnet_id,
-            gateway: Box::new(gateway),
-        })
+    Ok(Box::new(GatewayManagerFacet::new(
+        address,
+        Arc::new(signer),
+    )))
+}
+
+pub struct EvmManager {}
+
+impl EvmManager {
+    pub async fn parent_balance(
+        address: Address,
+        subnet: EVMSubnet,
+    ) -> anyhow::Result<TokenAmount> {
+        let provider = get_eth_provider(&subnet)?;
+        let balance = provider
+            .get_balance(payload_to_evm_address(address.payload())?, None)
+            .await?;
+        Ok(TokenAmount::from_atto(balance.as_u128()))
     }
 
     pub async fn deposit(
-        &self,
+        signer: &impl Signer,
         to: Address,
+        subnet: EVMSubnet,
         amount: TokenAmount,
     ) -> anyhow::Result<TransactionReceipt> {
+        let gateway = get_gateway(signer, &subnet)?;
+        let subnet_id = GatewaySubnetID::try_from(&get_subnet_id(signer)?.inner())?;
+
         let value = amount
             .atto()
             .to_u128()
             .ok_or_else(|| anyhow!("invalid value to fund"))?;
 
-        let mut call = self
-            .gateway
-            .fund(self.subnet_id.clone(), FvmAddress::try_from(to)?);
+        let mut call = gateway.fund(subnet_id, FvmAddress::try_from(to)?);
         call.tx.set_value(value);
 
-        self.send(call).await
+        send(&gateway, call).await
     }
 
     pub async fn withdraw(
-        &self,
+        signer: &impl Signer,
         to: Address,
+        subnet: EVMSubnet,
         amount: TokenAmount,
     ) -> anyhow::Result<TransactionReceipt> {
+        let gateway = get_gateway(signer, &subnet)?;
+
         let value = amount
             .atto()
             .to_u128()
             .ok_or_else(|| anyhow!("invalid value to fund"))?;
 
-        let mut call = self.gateway.release(FvmAddress::try_from(to)?);
+        let mut call = gateway.release(FvmAddress::try_from(to)?);
         call.tx.set_value(value);
 
-        self.send(call).await
+        send(&gateway, call).await
     }
+}
 
-    async fn send(
-        &self,
-        call: ContractCall<DefaultSignerMiddleware, ()>,
-    ) -> anyhow::Result<TransactionReceipt> {
-        let call = call_with_premium_estimation(self.gateway.client(), call).await?;
-        let tx = call.send().await?;
-        match tx.retries(TRANSACTION_RECEIPT_RETRIES).await? {
-            Some(receipt) => Ok(receipt),
-            None => Err(anyhow!(
-                "txn sent to network, but receipt cannot be obtained, please check scanner"
-            )),
-        }
+async fn send(
+    gateway: &GatewayManagerFacet<DefaultSignerMiddleware>,
+    call: ContractCall<DefaultSignerMiddleware, ()>,
+) -> anyhow::Result<TransactionReceipt> {
+    let call = call_with_premium_estimation(gateway.client(), call).await?;
+    let tx = call.send().await?;
+    match tx.retries(TRANSACTION_RECEIPT_RETRIES).await? {
+        Some(receipt) => Ok(receipt),
+        None => Err(anyhow!(
+            "txn sent to network, but receipt cannot be obtained, please check scanner"
+        )),
     }
 }
 

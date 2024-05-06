@@ -68,8 +68,8 @@ struct ObjectstorePutArgs {
     #[arg(short, long, env, value_parser = parse_secret_key)]
     private_key: SecretKey,
     /// Node Object API URL.
-    #[arg(long, env, default_value = "http://127.0.0.1:8001")]
-    object_api_url: Url,
+    #[arg(long, env)]
+    object_api_url: Option<Url>,
     /// Machine address of the object store.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
@@ -87,8 +87,8 @@ struct ObjectstorePutArgs {
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreGetArgs {
     /// Node Object API URL.
-    #[arg(long, env, default_value = "http://127.0.0.1:8001")]
-    object_api_url: Url,
+    #[arg(long, env)]
+    object_api_url: Option<Url>,
     /// Machine address of the object store.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
@@ -155,7 +155,10 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             signer.init_sequence(&provider).await?;
 
             let machine = ObjectStore::attach(*address);
-            let object_client = ObjectClient::new(object_api_url.clone());
+            let object_api_url = object_api_url
+                .clone()
+                .unwrap_or(cli.network.get().object_api_url()?);
+            let object_client = ObjectClient::new(object_api_url);
 
             let mut reader = input.into_async_reader().await?;
             let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH as usize];
@@ -263,7 +266,11 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             return Err(anyhow!("object is not resolved"));
                         }
 
-                        let object_client = ObjectClient::new(args.object_api_url.clone());
+                        let object_api_url = args
+                            .object_api_url
+                            .clone()
+                            .unwrap_or(cli.network.get().object_api_url()?);
+                        let object_client = ObjectClient::new(object_api_url);
 
                         let progress_bar = ObjectProgressBar::new(cli.quiet);
 

@@ -33,7 +33,7 @@ use adm_provider::{
     message::{local_message, object_upload_message},
     object::ObjectService,
     response::{decode_bytes, decode_cid, PrettyCid},
-    BroadcastMode, Provider, Tx,
+    BroadcastMode, Provider, QueryProvider, Tx,
 };
 use adm_signer::Signer;
 
@@ -162,15 +162,12 @@ impl ObjectStore {
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
-    pub async fn get<C>(
+    pub async fn get(
         &self,
-        provider: &impl Provider<C>,
+        provider: &impl QueryProvider,
         params: GetParams,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Option<Object>>
-    where
-        C: Client + Send + Sync,
-    {
+    ) -> anyhow::Result<Option<Object>> {
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, GetObject as u64, params);
         let response = provider.call(message, height, decode_get).await?;
@@ -189,15 +186,12 @@ impl ObjectStore {
         Ok(())
     }
 
-    pub async fn list<C>(
+    pub async fn list(
         &self,
-        provider: &impl Provider<C>,
+        provider: &impl QueryProvider,
         params: ListParams,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Option<ObjectList>>
-    where
-        C: Client + Send + Sync,
-    {
+    ) -> anyhow::Result<Option<ObjectList>> {
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, ListObjects as u64, params);
         let response = provider.call(message, height, decode_list).await?;
@@ -224,7 +218,7 @@ struct ObjectProcessor {
 }
 
 impl ObjectProcessor {
-    pub async fn new() -> anyhow::Result<Self> {
+    async fn new() -> anyhow::Result<Self> {
         let tmp = TempFile::new().await?;
         Ok(ObjectProcessor {
             tmp: Arc::new(Mutex::new(tmp)),

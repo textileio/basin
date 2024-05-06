@@ -16,7 +16,7 @@ use tendermint_rpc::Client;
 
 use adm_provider::{
     message::local_message, response::decode_bytes, response::decode_cid, response::PrettyCid,
-    BroadcastMode, Provider, Tx,
+    BroadcastMode, Provider, QueryProvider, Tx,
 };
 use adm_signer::Signer;
 
@@ -87,21 +87,18 @@ impl Accumulator {
             .await
     }
 
-    pub async fn root<C>(
+    pub async fn root(
         &self,
-        provider: &impl Provider<C>,
+        provider: &impl QueryProvider,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<PrettyCid>
-    where
-        C: Client + Send + Sync,
-    {
+    ) -> anyhow::Result<PrettyCid> {
         let message = local_message(self.address, Root as u64, Default::default());
         let response = provider.call(message, height, decode_cid).await?;
         Ok(response.value)
     }
 }
 
-pub fn decode_acc_push_return(deliver_tx: &DeliverTx) -> anyhow::Result<PushReturn> {
+fn decode_acc_push_return(deliver_tx: &DeliverTx) -> anyhow::Result<PushReturn> {
     let data = decode_bytes(deliver_tx)?;
     fvm_ipld_encoding::from_slice::<PushReturn>(&data)
         .map_err(|e| anyhow!("error parsing as PushReturn: {e}"))

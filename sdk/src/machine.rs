@@ -14,7 +14,9 @@ use serde::Serialize;
 use tendermint::{abci::response::DeliverTx, block::Height, Hash};
 use tendermint_rpc::Client;
 
-use adm_provider::{message::local_message, response::decode_bytes, BroadcastMode, Provider};
+use adm_provider::{
+    message::local_message, response::decode_bytes, BroadcastMode, Provider, QueryProvider,
+};
 use adm_signer::Signer;
 
 use crate::TxArgs;
@@ -48,14 +50,11 @@ pub trait Machine: Send + Sync + Sized {
 pub struct DefaultMachine {}
 
 impl DefaultMachine {
-    pub async fn metadata<C>(
-        provider: &impl Provider<C>,
+    pub async fn metadata(
+        provider: &impl QueryProvider,
         address: Address,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Metadata>
-    where
-        C: Client + Send + Sync,
-    {
+    ) -> anyhow::Result<Metadata> {
         let message = local_message(address, GET_METADATA_METHOD, Default::default());
         let response = provider.call(message, height, decode_metadata).await?;
         Ok(response.value)

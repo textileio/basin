@@ -13,7 +13,9 @@ use ipc_provider::config::subnet::EVMSubnet;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
-use adm_provider::{message::local_message, response::decode_bytes, BroadcastMode, Provider, Tx};
+use adm_provider::{
+    message::local_message, response::decode_bytes, BroadcastMode, Provider, QueryProvider, Tx,
+};
 use adm_signer::Signer;
 
 use crate::ipc::EvmManager;
@@ -22,14 +24,11 @@ use crate::TxArgs;
 pub struct Account {}
 
 impl Account {
-    pub async fn machines<C>(
-        provider: &impl Provider<C>,
+    pub async fn machines(
+        provider: &impl QueryProvider,
         signer: &impl Signer,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Vec<Metadata>>
-    where
-        C: Client + Send + Sync,
-    {
+    ) -> anyhow::Result<Vec<Metadata>> {
         let input = ListMetadataParams {
             owner: signer.address(),
         };
@@ -39,14 +38,52 @@ impl Account {
         Ok(response.value)
     }
 
+    pub async fn sequence(
+        provider: &impl QueryProvider,
+        signer: &impl Signer,
+        height: FvmQueryHeight,
+    ) -> anyhow::Result<u64> {
+        let response = provider.actor_state(&signer.address(), height).await?;
+
+        match response.value {
+            Some((_, state)) => Ok(state.sequence),
+            None => Err(anyhow!(
+                "failed to get sequence; actor {} cannot be found",
+                signer.address()
+            )),
+        }
+    }
+
+    pub async fn balance(
+        provider: &impl QueryProvider,
+        signer: &impl Signer,
+        height: FvmQueryHeight,
+    ) -> anyhow::Result<TokenAmount> {
+        let response = provider.actor_state(&signer.address(), height).await?;
+
+        match response.value {
+            Some((_, state)) => Ok(state.balance),
+            None => Err(anyhow!(
+                "failed to get balance; actor {} cannot be found",
+                signer.address()
+            )),
+        }
+    }
+
+    pub async fn parent_balance(
+        signer: &impl Signer,
+        subnet: EVMSubnet,
+    ) -> anyhow::Result<TokenAmount> {
+        EvmManager::parent_balance(signer.address(), subnet).await
+    }
+
     pub async fn deposit(
         signer: &impl Signer,
         to: Address,
         subnet: EVMSubnet,
         amount: TokenAmount,
     ) -> anyhow::Result<TransactionReceipt> {
-        let manager = EvmManager::new(signer, subnet)?;
-        manager.deposit(to, amount).await
+        EvmManager::deposit(signer, to, subnet, amount).await
     }
 
     pub async fn withdraw(
@@ -55,8 +92,7 @@ impl Account {
         subnet: EVMSubnet,
         amount: TokenAmount,
     ) -> anyhow::Result<TransactionReceipt> {
-        let manager = EvmManager::new(signer, subnet)?;
-        manager.withdraw(to, amount).await
+        EvmManager::withdraw(signer, to, subnet, amount).await
     }
 
     pub async fn transfer<C>(
