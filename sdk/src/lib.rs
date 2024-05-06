@@ -4,7 +4,7 @@
 use adm_provider::message::GasParams;
 
 pub mod account;
-mod ipc;
+pub mod ipc;
 pub mod machine;
 pub mod network;
 

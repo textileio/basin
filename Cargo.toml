@@ -74,7 +74,6 @@ fendermint_vm_message = { git = "ssh://git@github.com/amazingdatamachine/ipc.git
 
 ipc_actors_abis = { git = "ssh://git@github.com/amazingdatamachine/ipc.git" }
 ipc-api = { git = "ssh://git@github.com/amazingdatamachine/ipc.git" }
-ipc-provider = { git = "ssh://git@github.com/amazingdatamachine/ipc.git" }
 
 [patch.crates-io]
 # Contains some API changes that the upstream has not merged.
@@ -92,4 +91,3 @@ fendermint_vm_message = { path = "../ipc/fendermint/vm/message" }
 
 ipc_actors_abis = { path = "../ipc/contracts/binding" }
 ipc-api = { path = "../ipc/ipc/api" }
-ipc-provider = { path = "../ipc/ipc/provider" }

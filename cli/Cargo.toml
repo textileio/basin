@@ -43,8 +43,6 @@ fendermint_actor_objectstore = { workspace = true }
 fendermint_crypto = { workspace = true }
 fendermint_vm_message = { workspace = true }
 
-ipc-provider = { workspace = true }
-
 adm_provider = { path = "../provider" }
 adm_sdk = { path = "../sdk" }
 adm_signer = { path = "../signer" }

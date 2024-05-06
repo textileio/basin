@@ -19,11 +19,12 @@ use fvm_shared::{address::Address, econ::TokenAmount};
 use gateway_manager_facet::{FvmAddress, GatewayManagerFacet, SubnetID as GatewaySubnetID};
 use ipc_actors_abis::gateway_manager_facet;
 use ipc_api::evm::payload_to_evm_address;
-use ipc_provider::config::subnet::EVMSubnet;
 use num_traits::ToPrimitive;
 use reqwest::{header::HeaderValue, Client};
 
-use adm_signer::{Signer, SubnetID};
+use adm_signer::Signer;
+
+use crate::ipc::subnet::EVMSubnet;
 
 type DefaultSignerMiddleware = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 
@@ -75,21 +76,16 @@ fn get_eth_signer(
         Some(sk) => sk,
         None => return Err(anyhow!("failed to get secret key from signer")),
     };
-
-    let subnet_id = get_subnet_id(signer)?;
+    let subnet_id = match signer.subnet_id() {
+        Some(subnet_id) => subnet_id,
+        None => return Err(anyhow!("failed to get subnet ID from signer"))?,
+    };
     let chain_id = subnet_id.chain_id();
 
     let sk = secret_key.serialize();
     let wallet = LocalWallet::from_bytes(sk.as_slice())?.with_chain_id(chain_id);
 
     Ok(SignerMiddleware::new(provider, wallet))
-}
-
-fn get_subnet_id(signer: &impl Signer) -> anyhow::Result<SubnetID> {
-    match signer.subnet_id() {
-        Some(subnet_id) => Ok(subnet_id),
-        None => Err(anyhow!("failed to get subnet ID from signer")),
-    }
 }
 
 fn get_gateway(
@@ -126,7 +122,7 @@ impl EvmManager {
         amount: TokenAmount,
     ) -> anyhow::Result<TransactionReceipt> {
         let gateway = get_gateway(signer, &subnet)?;
-        let subnet_id = GatewaySubnetID::try_from(&get_subnet_id(signer)?.inner())?;
+        let subnet_id = GatewaySubnetID::try_from(&subnet.id.inner())?;
 
         let value = amount
             .atto()

@@ -5,7 +5,6 @@ use clap::{error::ErrorKind, Args, CommandFactory, Subcommand};
 use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::{address::Address, econ::TokenAmount};
-use ipc_provider::config::subnet::EVMSubnet;
 use reqwest::Url;
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -14,7 +13,7 @@ use adm_provider::{
     json_rpc::JsonRpcProvider,
     util::{parse_address, parse_token_amount},
 };
-use adm_sdk::account::Account;
+use adm_sdk::{account::Account, ipc::subnet::EVMSubnet};
 use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Void, Wallet};
 
 use crate::{get_rpc_url, get_subnet_id, print_json, Cli};
@@ -114,7 +113,7 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
 
     match &args.command {
         AccountCommands::Machines(args) => {
-            let address = get_address(args.clone(), subnet_id)?;
+            let address = get_address(args.clone(), &subnet_id)?;
             let metadata =
                 Account::machines(&provider, &Void::new(address), FvmQueryHeight::Committed)
                     .await?;
@@ -127,7 +126,7 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             print_json(&metadata)
         }
         AccountCommands::Sequence(args) => {
-            let address = get_address(args.clone(), subnet_id)?;
+            let address = get_address(args.clone(), &subnet_id)?;
             let sequence =
                 Account::sequence(&provider, &Void::new(address), FvmQueryHeight::Committed)
                     .await?;
@@ -135,25 +134,27 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             print_json(&json!({"sequence": sequence}))
         }
         AccountCommands::Balance(args) => {
-            let address = get_address(args.clone(), subnet_id)?;
+            let address = get_address(args.clone(), &subnet_id)?;
             let balance =
                 Account::balance(&provider, &Void::new(address), FvmQueryHeight::Committed).await?;
 
             print_json(&json!({"balance": balance.to_string()}))
         }
         AccountCommands::ParentBalance(args) => {
-            let address = get_address(args.address.clone(), subnet_id)?;
-            let config = get_parent_subnet_config(&cli, args.subnet.clone())?;
+            let address = get_address(args.address.clone(), &subnet_id)?;
+            let config = get_parent_subnet_config(&cli, &subnet_id, args.subnet.clone())?;
             let balance = Account::parent_balance(&Void::new(address), config).await?;
 
             print_json(&json!({"balance": balance.to_string()}))
         }
         AccountCommands::Deposit(args) => {
-            let subnet_id = subnet_id.parent()?; // Deposits target the parent subnet
-            let config = get_parent_subnet_config(&cli, args.subnet.clone())?;
+            let config = get_parent_subnet_config(&cli, &subnet_id, args.subnet.clone())?;
 
-            let signer =
-                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+            let signer = Wallet::new_secp256k1(
+                args.private_key.clone(),
+                AccountKind::Ethereum,
+                subnet_id.parent()?, // Signer must target the parent subnet
+            )?;
 
             let tx = Account::deposit(
                 &signer,
@@ -166,7 +167,7 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             print_json(&tx)
         }
         AccountCommands::Withdraw(args) => {
-            let config = get_subnet_config(&cli, args.subnet.clone())?;
+            let config = get_subnet_config(&cli, &subnet_id, args.subnet.clone())?;
 
             let signer =
                 Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
@@ -201,17 +202,17 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
 }
 
 /// Returns address from private key or address arg.
-fn get_address(args: AddressArgs, subnet_id: SubnetID) -> anyhow::Result<Address> {
+fn get_address(args: AddressArgs, subnet_id: &SubnetID) -> anyhow::Result<Address> {
     let address = if let Some(addr) = args.address {
         addr
     } else if let Some(sk) = args.private_key.clone() {
-        let signer = Wallet::new_secp256k1(sk, AccountKind::Ethereum, subnet_id)?;
+        let signer = Wallet::new_secp256k1(sk, AccountKind::Ethereum, subnet_id.clone())?;
         signer.address()
     } else {
         Cli::command()
             .error(
                 ErrorKind::MissingRequiredArgument,
-                "the following required arguments were not provided: --private-key OR --owner",
+                "the following required arguments were not provided: --private-key OR --address",
             )
             .exit();
     };
@@ -219,24 +220,30 @@ fn get_address(args: AddressArgs, subnet_id: SubnetID) -> anyhow::Result<Address
 }
 
 /// Returns the subnet configuration from args.
-fn get_subnet_config(cli: &Cli, args: SubnetArgs) -> anyhow::Result<EVMSubnet> {
+fn get_subnet_config(cli: &Cli, id: &SubnetID, args: SubnetArgs) -> anyhow::Result<EVMSubnet> {
     let network = cli.network.get();
     Ok(EVMSubnet {
+        id: id.clone(),
         provider_http: args.evm_rpc_url.unwrap_or(network.evm_rpc_url()?),
         provider_timeout: Some(args.evm_rpc_timeout),
-        auth_token: args.evm_rpc_auth_token.clone(),
+        auth_token: args.evm_rpc_auth_token,
         registry_addr: args.evm_registry.unwrap_or(network.evm_registry()?),
         gateway_addr: args.evm_gateway.unwrap_or(network.evm_gateway()?),
     })
 }
 
 /// Returns the parent subnet configuration from args.
-fn get_parent_subnet_config(cli: &Cli, args: SubnetArgs) -> anyhow::Result<EVMSubnet> {
+fn get_parent_subnet_config(
+    cli: &Cli,
+    id: &SubnetID,
+    args: SubnetArgs,
+) -> anyhow::Result<EVMSubnet> {
     let network = cli.network.get();
     Ok(EVMSubnet {
+        id: id.clone(),
         provider_http: args.evm_rpc_url.unwrap_or(network.parent_evm_rpc_url()?),
         provider_timeout: Some(args.evm_rpc_timeout),
-        auth_token: args.evm_rpc_auth_token.clone(),
+        auth_token: args.evm_rpc_auth_token,
         registry_addr: args.evm_registry.unwrap_or(network.parent_evm_registry()?),
         gateway_addr: args.evm_gateway.unwrap_or(network.parent_evm_gateway()?),
     })
