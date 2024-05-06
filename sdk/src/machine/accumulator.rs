@@ -5,12 +5,12 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
 use fendermint_actor_accumulator::Method::{Push, Root};
-use fendermint_actor_accumulator::PushReturn;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::{BytesSer, RawBytes};
 use fvm_shared::address::Address;
+use serde::{Deserialize, Serialize};
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
@@ -24,6 +24,22 @@ use crate::machine::{deploy_machine, DeployTx, Machine};
 use crate::TxArgs;
 
 const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
+
+/// Pretty version of [`fendermint_actor_accumulator::PushReturn`].
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PushReturn {
+    pub root: PrettyCid,
+    pub index: u64,
+}
+
+impl From<fendermint_actor_accumulator::PushReturn> for PushReturn {
+    fn from(v: fendermint_actor_accumulator::PushReturn) -> Self {
+        Self {
+            root: v.root.into(),
+            index: v.index,
+        }
+    }
+}
 
 pub struct Accumulator {
     address: Address,
@@ -100,6 +116,7 @@ impl Accumulator {
 
 fn decode_acc_push_return(deliver_tx: &DeliverTx) -> anyhow::Result<PushReturn> {
     let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<PushReturn>(&data)
+    fvm_ipld_encoding::from_slice::<fendermint_actor_accumulator::PushReturn>(&data)
+        .map(|r| r.into())
         .map_err(|e| anyhow!("error parsing as PushReturn: {e}"))
 }

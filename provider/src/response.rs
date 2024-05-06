@@ -47,7 +47,7 @@ pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<PrettyCid> {
 }
 
 /// Wrapper for [`Cid`] that is display friendly.
-#[derive(Copy, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PrettyCid {
     inner: Cid,
 }
