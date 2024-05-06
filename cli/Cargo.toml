@@ -20,6 +20,10 @@ bytes = { workspace = true }
 cid = { workspace = true }
 clap = { workspace = true }
 clap-stdin = { workspace = true }
+console = { workspace = true }
+ethers = { workspace = true }
+humantime = { workspace = true }
+indicatif = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -27,8 +31,6 @@ stderrlog = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
-indicatif = { workspace = true }
-console = { workspace = true }
 
 tendermint-rpc = { workspace = true }
 
@@ -39,8 +41,9 @@ fendermint_actor_accumulator = { workspace = true }
 fendermint_actor_machine = { workspace = true }
 fendermint_actor_objectstore = { workspace = true }
 fendermint_crypto = { workspace = true }
-fendermint_vm_core = { workspace = true }
 fendermint_vm_message = { workspace = true }
+
+ipc-provider = { workspace = true }
 
 adm_provider = { path = "../provider" }
 adm_sdk = { path = "../sdk" }

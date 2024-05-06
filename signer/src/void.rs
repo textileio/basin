@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use anyhow::anyhow;
+use fendermint_crypto::SecretKey;
 use fendermint_vm_message::{chain::ChainMessage, signed::Object, signed::SignedMessage};
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{
@@ -11,13 +12,30 @@ use fvm_shared::{
 use adm_provider::message::GasParams;
 
 use crate::signer::Signer;
+use crate::SubnetID;
 
-#[derive(Clone)]
-pub struct Void {}
+#[derive(Clone, Debug)]
+pub struct Void {
+    address: Address,
+}
+
+impl Void {
+    pub fn new(address: Address) -> Self {
+        Self { address }
+    }
+}
 
 impl Signer for Void {
     fn address(&self) -> Address {
-        Address::new_id(0)
+        self.address
+    }
+
+    fn secret_key(&self) -> Option<SecretKey> {
+        None
+    }
+
+    fn subnet_id(&self) -> Option<SubnetID> {
+        None
     }
 
     fn transaction(

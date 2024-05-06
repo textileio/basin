@@ -1,3 +1,6 @@
+// Copyright 2024 ADM Contributors
+// SPDX-License-Identifier: Apache-2.0, MIT
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use cid::Cid;
@@ -18,6 +21,7 @@ pub trait ObjectService {
         body: reqwest::Body,
         size: usize,
         msg: String,
+        chain_id: u64,
     ) -> anyhow::Result<UploadResponse>;
 
     async fn download(
@@ -31,15 +35,13 @@ pub trait ObjectService {
 pub struct ObjectClient {
     inner: Client,
     endpoint: Url,
-    chain_id: u64,
 }
 
 impl ObjectClient {
-    pub fn new(endpoint: Url, chain_id: u64) -> Self {
+    pub fn new(endpoint: Url) -> Self {
         ObjectClient {
             inner: Client::new(),
             endpoint,
-            chain_id,
         }
     }
 }
@@ -51,13 +53,14 @@ impl ObjectService for ObjectClient {
         body: reqwest::Body,
         total_bytes: usize,
         msg: String,
+        chain_id: u64,
     ) -> anyhow::Result<UploadResponse> {
         let part = Part::stream_with_length(body, total_bytes as u64)
             .file_name("upload")
             .mime_str("application/octet-stream")?;
 
         let form = Form::new()
-            .text("chain_id", self.chain_id.to_string())
+            .text("chain_id", chain_id.to_string())
             .text("msg", msg)
             .part("object", part);
 

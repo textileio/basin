@@ -1,21 +1,21 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use anyhow::anyhow;
 use bytes::Bytes;
 use clap::{Args, Subcommand};
 use clap_stdin::FileOrStdin;
 use fendermint_actor_machine::WriteAccess;
+use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
 use serde_json::json;
-use tendermint_rpc::HttpClient;
 use tokio::io::AsyncReadExt;
 
-use adm_provider::{json_rpc::JsonRpcProvider, BroadcastMode};
+use adm_provider::{json_rpc::JsonRpcProvider, util::parse_address, BroadcastMode};
 use adm_sdk::machine::{accumulator::Accumulator, Machine};
+use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
-use crate::{get_signer, parse_address, print_json, Cli, MAX_ACC_PAYLOAD_SIZE};
+use crate::{get_rpc_url, get_subnet_id, print_json, Cli};
 
 #[derive(Clone, Debug, Args)]
 pub struct AccumulatorArgs {
@@ -25,44 +25,54 @@ pub struct AccumulatorArgs {
 
 #[derive(Clone, Debug, Subcommand)]
 enum AccumulatorCommands {
-    /// Create a new accumulator
+    /// Create a new accumulator.
     Create(AccumulatorCreateArgs),
-    /// Push a new value to the accumulator
+    /// Push a new value to the accumulator.
     Push(AccumulatorPushArgs),
-    /// Get the current root of the accumulator
+    /// Get the current root of the accumulator.
     Root(AccumulatorRootArgs),
 }
 
 #[derive(Clone, Debug, Args)]
 struct AccumulatorCreateArgs {
-    /// Allow public write access to the accumulator
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: SecretKey,
+    /// Allow public write access to the accumulator.
     #[arg(long, default_value_t = false)]
     public_write: bool,
 }
 
 #[derive(Clone, Debug, Args)]
 struct AccumulatorPushArgs {
-    /// Address of the accumulator actor
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: SecretKey,
+    /// Accumulator machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
-    /// Input file (or stdin) containing the value to push
+    /// Input file (or stdin) containing the value to push.
     #[clap(default_value = "-")]
     input: FileOrStdin,
 }
 
 #[derive(Clone, Debug, Args)]
 struct AccumulatorRootArgs {
-    /// Address of the accumulator actor
+    /// Accumulator machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
 }
 
 pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Result<()> {
-    let provider = JsonRpcProvider::new_http(cli.rpc_url, None)?;
+    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
+    let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
         AccumulatorCommands::Create(args) => {
-            let mut signer = get_signer(&provider, cli.wallet_pk, cli.chain_name).await?;
+            let mut signer =
+                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+            signer.init_sequence(&provider).await?;
+
             let write_access = if args.public_write {
                 WriteAccess::Public
             } else {
@@ -74,20 +84,16 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
         AccumulatorCommands::Push(args) => {
-            let mut signer = get_signer(&provider, cli.wallet_pk, cli.chain_name).await?;
-            let machine = Accumulator::<HttpClient>::attach(args.address);
+            let mut signer =
+                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+            signer.init_sequence(&provider).await?;
+
+            let machine = Accumulator::attach(args.address);
 
             let mut reader = args.input.into_async_reader().await?;
             let mut buf = Vec::new();
             reader.read_to_end(&mut buf).await?;
             let payload = Bytes::from(buf);
-
-            if payload.len() > MAX_ACC_PAYLOAD_SIZE {
-                return Err(anyhow!(
-                    "max payload size is {} bytes",
-                    MAX_ACC_PAYLOAD_SIZE
-                ));
-            }
 
             let tx = machine
                 .push(
@@ -102,7 +108,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             print_json(&tx)
         }
         AccumulatorCommands::Root(args) => {
-            let machine = Accumulator::<HttpClient>::attach(args.address);
+            let machine = Accumulator::attach(args.address);
             let root = machine.root(&provider, FvmQueryHeight::Committed).await?;
 
             print_json(&json!({"root": root.to_string()}))

@@ -1,6 +1,7 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use fendermint_crypto::SecretKey;
 use fendermint_vm_message::{chain::ChainMessage, signed::Object, signed::SignedMessage};
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{
@@ -9,8 +10,14 @@ use fvm_shared::{
 
 use adm_provider::message::GasParams;
 
+use crate::SubnetID;
+
 pub trait Signer: Clone + Send + Sync {
     fn address(&self) -> Address;
+
+    fn secret_key(&self) -> Option<SecretKey>;
+
+    fn subnet_id(&self) -> Option<SubnetID>;
 
     fn transaction(
         &mut self,

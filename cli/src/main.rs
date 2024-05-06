@@ -3,30 +3,20 @@
 
 // TODO: Handle gas options
 // TODO: Handle broadcast mode options
-// TODO: Add command for Adm::transfer
-// TODO: Parse returned account addresses as EthAddress (hex)
 
-use anyhow::anyhow;
-use clap::{Parser, Subcommand};
-use fendermint_vm_core::chainid;
-use fvm_shared::address::{Address, Network};
+use clap::{Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 use stderrlog::Timestamp;
 use tendermint_rpc::Url;
 
-use adm_provider::json_rpc::JsonRpcProvider;
-use adm_sdk::network::use_testnet_addresses;
-use adm_signer::{key::read_secret_key, AccountKind, Wallet};
+use adm_sdk::network::{use_testnet_addresses, Network as SdkNetwork};
+use adm_signer::SubnetID;
 
+use crate::account::{handle_account, AccountArgs};
 use crate::machine::{handle_machine, MachineArgs};
 
+mod account;
 mod machine;
-
-// use tokio_util::codec::{BytesCodec, FramedRead};
-// use reqwest::Body;
-
-// const MAX_INTERNAL_OBJECT_SIZE: usize = 1024;
-const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 
 /// Command line args
 #[derive(Clone, Debug, Parser)]
@@ -34,33 +24,52 @@ const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-    /// Node CometBFT RPC URL
-    #[arg(long, env, default_value = "http://127.0.0.1:26657")]
-    rpc_url: Url,
-    /// Node Object API URL
-    #[arg(long, env, default_value = "http://127.0.0.1:8001")]
-    object_api_url: Url,
-    /// Wallet private key (ECDSA, secp256k1) for signing transactions
+    /// Network presets for subnet and RPC URLs.
+    #[arg(long, value_enum, env, default_value_t = Network::Testnet)]
+    network: Network,
+    /// The ID of the target subnet.
+    #[arg(short, long, env)]
+    subnet: Option<SubnetID>,
+    /// Node CometBFT RPC URL.
     #[arg(long, env)]
-    wallet_pk: Option<String>,
-    /// IPC chain name
-    #[arg(long, env, default_value = "test")]
-    chain_name: String,
-    /// Use testnet addresses
-    #[arg(long, env, default_value_t = true)]
-    testnet: bool,
-    /// Logging verbosity (repeat for more verbose logging)
+    rpc_url: Option<Url>,
+    /// Logging verbosity (repeat for more verbose logging).
     #[arg(short, long, env, action = clap::ArgAction::Count)]
     verbosity: u8,
-    /// Silence logging
+    /// Silence logging.
     #[arg(short, long, env, default_value_t = false)]
     quiet: bool,
 }
 
 #[derive(Clone, Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum Commands {
+    /// Account related commands.
+    #[clap(alias = "accounts")]
+    Account(AccountArgs),
+    /// Machine related commands.
     #[clap(alias = "machines")]
     Machine(MachineArgs),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum Network {
+    /// Network presets for mainnet.
+    Mainnet,
+    /// Network presets for Calibration (default pre-mainnet).
+    Testnet,
+    /// Network presets for local development.
+    Devnet,
+}
+
+impl Network {
+    pub fn get(&self) -> SdkNetwork {
+        match self {
+            Network::Mainnet => SdkNetwork::Mainnet,
+            Network::Testnet => SdkNetwork::Testnet,
+            Network::Devnet => SdkNetwork::Devnet,
+        }
+    }
 }
 
 #[tokio::main]
@@ -75,41 +84,28 @@ async fn main() -> anyhow::Result<()> {
         .init()
         .unwrap();
 
-    if cli.testnet {
-        use_testnet_addresses()
+    match cli.network {
+        Network::Testnet | Network::Devnet => use_testnet_addresses(),
+        _ => {}
     }
 
     match &cli.command.clone() {
+        Commands::Account(args) => handle_account(cli, args).await,
         Commands::Machine(args) => handle_machine(cli, args).await,
     }
 }
 
-async fn get_signer(
-    provider: &JsonRpcProvider,
-    pk: Option<String>,
-    chain_name: String,
-) -> anyhow::Result<Wallet> {
-    if let Some(pk) = pk {
-        let chain_id = chainid::from_str_hashed(&chain_name)?;
-        let sk = read_secret_key(&pk)?;
-        let mut wallet = Wallet::new_secp256k1(sk, AccountKind::Ethereum, chain_id)?;
-        wallet.init_sequence(provider).await?;
-        Ok(wallet)
-    } else {
-        Err(anyhow!(
-            "--wallet-pk <WALLET_PK> is required to sign transactions"
-        ))
-    }
+/// Returns subnet ID from the override or network preset.
+fn get_subnet_id(cli: &Cli) -> anyhow::Result<SubnetID> {
+    Ok(cli.subnet.clone().unwrap_or(cli.network.get().subnet()?))
 }
 
-pub fn parse_address(s: &str) -> Result<Address, String> {
-    let addr = Network::Mainnet
-        .parse_address(s)
-        .or_else(|_| Network::Testnet.parse_address(s))
-        .map_err(|e| format!("{}", e))?;
-    Ok(addr)
+/// Returns rpc url from the override or network preset.
+fn get_rpc_url(cli: &Cli) -> anyhow::Result<Url> {
+    Ok(cli.rpc_url.clone().unwrap_or(cli.network.get().rpc_url()?))
 }
 
+/// Print serializable to stdout as pretty formatted JSON.
 fn print_json<T: Serialize>(value: &T) -> anyhow::Result<()> {
     let json = serde_json::to_string_pretty(&value)?;
     println!("{}", json);

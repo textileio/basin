@@ -1,7 +1,7 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use std::marker::PhantomData;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_tempfile::TempFile;
@@ -18,54 +18,50 @@ use fendermint_actor_objectstore::{
 use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::{query::FvmQueryHeight, signed::Object as MessageObject};
 use fvm_ipld_encoding::RawBytes;
-use fvm_shared::address::Address;
-use reqwest;
-use std::sync::Arc;
+use fvm_shared::{address::Address, chainid::ChainID};
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
-use tokio::sync::{mpsc, mpsc::Sender, Mutex};
-use tokio::task::LocalSet;
+use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt},
+    sync::{mpsc, mpsc::Sender, Mutex},
+    task::LocalSet,
+};
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use unixfs_v1::file::adder::{Chunker, FileAdder};
 
 use adm_provider::{
     message::{local_message, object_upload_message},
     object::ObjectService,
-    response::{decode_bytes, decode_cid},
-    BroadcastMode, Provider, Tx,
+    response::{decode_bytes, decode_cid, PrettyCid},
+    BroadcastMode, Provider, QueryProvider, Tx,
 };
 use adm_signer::Signer;
 
 use crate::machine::{deploy_machine, DeployTx, Machine};
 use crate::TxArgs;
 
-pub struct ObjectStore<C> {
+pub struct ObjectStore {
     address: Address,
-    _marker: PhantomData<C>,
 }
 
 #[async_trait]
-impl<C> Machine<C> for ObjectStore<C>
-where
-    C: Client + Send + Sync,
-{
-    async fn new(
+impl Machine for ObjectStore {
+    async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
         args: TxArgs,
-    ) -> anyhow::Result<(Self, DeployTx)> {
+    ) -> anyhow::Result<(Self, DeployTx)>
+    where
+        C: Client + Send + Sync,
+    {
         let (address, tx) =
             deploy_machine(provider, signer, Kind::ObjectStore, write_access, args).await?;
         Ok((Self::attach(address), tx))
     }
 
     fn attach(address: Address) -> Self {
-        ObjectStore {
-            address,
-            _marker: PhantomData,
-        }
+        ObjectStore { address }
     }
 
     fn address(&self) -> Address {
@@ -73,69 +69,18 @@ where
     }
 }
 
-impl<C> ObjectStore<C> {
-    pub async fn upload(
-        &self,
-        signer: &mut impl Signer,
-        object_client: impl ObjectService,
-        key: String,
-        cid: Cid,
-        rx: mpsc::Receiver<Vec<u8>>,
-        size: usize,
-        params: PutParams,
-    ) -> anyhow::Result<Cid> {
-        let from = signer.address();
-        let serialized_params = RawBytes::serialize(params)?;
-        let message =
-            object_upload_message(from, self.address, PutObject as u64, serialized_params);
-        let singed_message = signer.sign_message(
-            message,
-            Some(MessageObject::new(
-                key.as_bytes().to_vec(),
-                cid,
-                self.address,
-            )),
-        )?;
-        let serialized_signed_message = fvm_ipld_encoding::to_vec(&singed_message)?;
-
-        let object_stream = ReceiverStream::new(rx)
-            .map(|bytes_vec| Ok::<Bytes, reqwest::Error>(Bytes::from(bytes_vec)));
-        let body = reqwest::Body::wrap_stream(object_stream);
-        let response = object_client
-            .upload(
-                body,
-                size,
-                general_purpose::URL_SAFE.encode(&serialized_signed_message),
-            )
-            .await?;
-        Ok(response.cid)
-    }
-
-    pub async fn download(
-        &self,
-        object_client: impl ObjectService,
-        key: String,
-        writer: impl AsyncWrite + Unpin + Send + 'static,
-    ) -> anyhow::Result<()> {
-        object_client
-            .download(self.address.to_string(), key, writer)
-            .await?;
-        Ok(())
-    }
-}
-
-impl<C> ObjectStore<C>
-where
-    C: Client + Send + Sync,
-{
-    pub async fn put(
+impl ObjectStore {
+    pub async fn put<C>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         params: PutParams,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<Cid>> {
+    ) -> anyhow::Result<Tx<PrettyCid>>
+    where
+        C: Client + Send + Sync,
+    {
         let object = match &params.kind {
             ObjectKind::Internal(_) => None,
             ObjectKind::External(cid) => {
@@ -154,14 +99,57 @@ where
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
-    pub async fn delete(
+    #[allow(clippy::too_many_arguments)]
+    pub async fn upload(
+        &self,
+        signer: &mut impl Signer,
+        object_client: impl ObjectService,
+        key: String,
+        cid: Cid,
+        size: usize,
+        overwrite: bool,
+        chain_id: ChainID,
+        rx: mpsc::Receiver<Vec<u8>>,
+    ) -> anyhow::Result<Cid> {
+        let from = signer.address();
+        let key = key.as_bytes().to_vec();
+        let params = PutParams {
+            key: key.clone(),
+            kind: ObjectKind::External(cid),
+            overwrite,
+        };
+        let serialized_params = RawBytes::serialize(params)?;
+        let message =
+            object_upload_message(from, self.address, PutObject as u64, serialized_params);
+        let singed_message =
+            signer.sign_message(message, Some(MessageObject::new(key, cid, self.address)))?;
+        let serialized_signed_message = fvm_ipld_encoding::to_vec(&singed_message)?;
+
+        let object_stream = ReceiverStream::new(rx)
+            .map(|bytes_vec| Ok::<Bytes, reqwest::Error>(Bytes::from(bytes_vec)));
+        let body = reqwest::Body::wrap_stream(object_stream);
+        let response = object_client
+            .upload(
+                body,
+                size,
+                general_purpose::URL_SAFE.encode(&serialized_signed_message),
+                chain_id.into(),
+            )
+            .await?;
+        Ok(response.cid)
+    }
+
+    pub async fn delete<C>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         params: DeleteParams,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<Cid>> {
+    ) -> anyhow::Result<Tx<PrettyCid>>
+    where
+        C: Client + Send + Sync,
+    {
         let params = RawBytes::serialize(params)?;
         let message = signer.transaction(
             self.address,
@@ -176,7 +164,7 @@ where
 
     pub async fn get(
         &self,
-        provider: &impl Provider<C>,
+        provider: &impl QueryProvider,
         params: GetParams,
         height: FvmQueryHeight,
     ) -> anyhow::Result<Option<Object>> {
@@ -186,9 +174,21 @@ where
         Ok(response.value)
     }
 
+    pub async fn download(
+        &self,
+        object_client: impl ObjectService,
+        key: String,
+        writer: impl AsyncWrite + Unpin + Send + 'static,
+    ) -> anyhow::Result<()> {
+        object_client
+            .download(self.address.to_string(), key, writer)
+            .await?;
+        Ok(())
+    }
+
     pub async fn list(
         &self,
-        provider: &impl Provider<C>,
+        provider: &impl QueryProvider,
         params: ListParams,
         height: FvmQueryHeight,
     ) -> anyhow::Result<Option<ObjectList>> {
@@ -218,7 +218,7 @@ struct ObjectProcessor {
 }
 
 impl ObjectProcessor {
-    pub async fn new() -> anyhow::Result<Self> {
+    async fn new() -> anyhow::Result<Self> {
         let tmp = TempFile::new().await?;
         Ok(ObjectProcessor {
             tmp: Arc::new(Mutex::new(tmp)),
@@ -299,8 +299,8 @@ impl ObjectProcessor {
     }
 }
 
-/// Process the object from the reader and send it to the channel
-/// Returns the CID and the total bytes read from the reader
+/// Process the object from the reader and send it to the channel.
+/// Returns the CID and the total bytes read from the reader.
 ///
 /// Uses a LocalSet to spawn the non-Send future.
 /// This is necessary because the clap's AsyncReader impl
@@ -331,14 +331,16 @@ pub async fn process_object(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rand::{thread_rng, Rng};
     use std::io::Error;
     use std::pin::Pin;
     use std::task::{Context, Poll};
+
+    use rand::{thread_rng, Rng};
     use tokio::io::AsyncRead;
     use tokio::io::ReadBuf;
     use tokio::sync::mpsc;
+
+    use super::*;
 
     struct MockReader {
         content: Vec<u8>,

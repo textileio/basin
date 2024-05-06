@@ -9,13 +9,13 @@ use fendermint_vm_message::{
 };
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{
-    address::Address, chainid::ChainID, crypto::signature::Signature, econ::TokenAmount,
-    message::Message, MethodNum,
+    address::Address, crypto::signature::Signature, econ::TokenAmount, message::Message, MethodNum,
 };
 
 use adm_provider::{message::GasParams, QueryProvider};
 
 use crate::signer::Signer;
+use crate::SubnetID;
 
 #[derive(Debug, Clone)]
 pub enum AccountKind {
@@ -25,15 +25,23 @@ pub enum AccountKind {
 
 #[derive(Debug, Clone)]
 pub struct Wallet {
-    sk: SecretKey,
     addr: Address,
-    chain_id: ChainID,
+    sk: SecretKey,
+    subnet_id: SubnetID,
     sequence: u64, // TODO: make send + sync
 }
 
 impl Signer for Wallet {
     fn address(&self) -> Address {
         self.addr
+    }
+
+    fn secret_key(&self) -> Option<SecretKey> {
+        Some(self.sk.clone())
+    }
+
+    fn subnet_id(&self) -> Option<SubnetID> {
+        Some(self.subnet_id.clone())
     }
 
     fn transaction(
@@ -58,7 +66,8 @@ impl Signer for Wallet {
             gas_premium: gas_params.gas_premium,
         };
         self.sequence += 1;
-        let signed = SignedMessage::new_secp256k1(message, object, &self.sk, &self.chain_id)?;
+        let signed =
+            SignedMessage::new_secp256k1(message, object, &self.sk, &self.subnet_id.chain_id())?;
         Ok(ChainMessage::Signed(signed))
     }
 
@@ -67,7 +76,8 @@ impl Signer for Wallet {
         message: Message,
         object: Option<Object>,
     ) -> anyhow::Result<SignedMessage> {
-        let signed = SignedMessage::new_secp256k1(message, object, &self.sk, &self.chain_id)?;
+        let signed =
+            SignedMessage::new_secp256k1(message, object, &self.sk, &self.subnet_id.chain_id())?;
         Ok(signed)
     }
 
@@ -77,7 +87,7 @@ impl Signer for Wallet {
         object: &Option<Object>,
         signature: &Signature,
     ) -> anyhow::Result<()> {
-        SignedMessage::verify_signature(message, object, signature, &self.chain_id)?;
+        SignedMessage::verify_signature(message, object, signature, &self.subnet_id.chain_id())?;
         Ok(())
     }
 }
@@ -86,7 +96,7 @@ impl Wallet {
     pub fn new_secp256k1(
         sk: SecretKey,
         kind: AccountKind,
-        chain_id: ChainID,
+        subnet_id: SubnetID,
     ) -> anyhow::Result<Self> {
         let pk = sk.public_key().serialize();
         let addr = match kind {
@@ -96,7 +106,7 @@ impl Wallet {
         Ok(Wallet {
             sk,
             addr,
-            chain_id,
+            subnet_id,
             sequence: 0,
         })
     }

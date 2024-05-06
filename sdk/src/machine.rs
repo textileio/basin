@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fendermint_actor_machine::{WriteAccess, GET_METADATA_METHOD};
+use fendermint_actor_machine::{Metadata, WriteAccess, GET_METADATA_METHOD};
 use fendermint_vm_actor_interface::adm::{
     CreateExternalParams, CreateExternalReturn, Kind, Method::CreateExternal, ADM_ACTOR_ADDR,
 };
@@ -14,10 +14,12 @@ use serde::Serialize;
 use tendermint::{abci::response::DeliverTx, block::Height, Hash};
 use tendermint_rpc::Client;
 
-use adm_provider::{message::local_message, response::decode_bytes, BroadcastMode, Provider};
+use adm_provider::{
+    message::local_message, response::decode_bytes, BroadcastMode, Provider, QueryProvider,
+};
 use adm_signer::Signer;
 
-use crate::{decode_metadata, TxArgs};
+use crate::TxArgs;
 
 pub mod accumulator;
 pub mod objectstore;
@@ -30,29 +32,32 @@ pub struct DeployTx {
 }
 
 #[async_trait]
-pub trait Machine<C>: Send + Sync + Sized
-where
-    C: Client + Send + Sync,
-{
-    async fn new(
+pub trait Machine: Send + Sync + Sized {
+    async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
         args: TxArgs,
-    ) -> anyhow::Result<(Self, DeployTx)>;
+    ) -> anyhow::Result<(Self, DeployTx)>
+    where
+        C: Client + Send + Sync;
 
     fn attach(address: Address) -> Self;
 
     fn address(&self) -> Address;
+}
 
-    async fn owner(
-        &self,
-        provider: &impl Provider<C>,
+pub struct DefaultMachine {}
+
+impl DefaultMachine {
+    pub async fn metadata(
+        provider: &impl QueryProvider,
+        address: Address,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Address> {
-        let message = local_message(self.address(), GET_METADATA_METHOD, Default::default());
+    ) -> anyhow::Result<Metadata> {
+        let message = local_message(address, GET_METADATA_METHOD, Default::default());
         let response = provider.call(message, height, decode_metadata).await?;
-        Ok(response.value.owner)
+        Ok(response.value)
     }
 }
 
@@ -95,6 +100,12 @@ where
             gas_used: tx.gas_used,
         },
     ))
+}
+
+fn decode_metadata(deliver_tx: &DeliverTx) -> anyhow::Result<Metadata> {
+    let data = decode_bytes(deliver_tx)?;
+    fvm_ipld_encoding::from_slice::<Metadata>(&data)
+        .map_err(|e| anyhow!("error parsing as Metadata: {e}"))
 }
 
 fn decode_create(deliver_tx: &DeliverTx) -> anyhow::Result<CreateExternalReturn> {
