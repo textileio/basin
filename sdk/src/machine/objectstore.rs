@@ -8,7 +8,6 @@ use async_tempfile::TempFile;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
-use cid::Cid;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_actor_objectstore::{
     DeleteParams, GetParams, ListParams,
@@ -32,7 +31,7 @@ use unixfs_v1::file::adder::{Chunker, FileAdder};
 use adm_provider::{
     message::{local_message, object_upload_message},
     object::ObjectService,
-    response::{decode_bytes, decode_cid, PrettyCid},
+    response::{decode_bytes, decode_cid, Cid},
     BroadcastMode, Provider, QueryProvider, Tx,
 };
 use adm_signer::Signer;
@@ -77,7 +76,7 @@ impl ObjectStore {
         params: PutParams,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<PrettyCid>>
+    ) -> anyhow::Result<Tx<Cid>>
     where
         C: Client + Send + Sync,
     {
@@ -105,12 +104,12 @@ impl ObjectStore {
         signer: &mut impl Signer,
         object_client: impl ObjectService,
         key: String,
-        cid: Cid,
+        cid: cid::Cid,
         size: usize,
         overwrite: bool,
         chain_id: ChainID,
         rx: mpsc::Receiver<Vec<u8>>,
-    ) -> anyhow::Result<Cid> {
+    ) -> anyhow::Result<cid::Cid> {
         let from = signer.address();
         let key = key.as_bytes().to_vec();
         let params = PutParams {
@@ -146,7 +145,7 @@ impl ObjectStore {
         params: DeleteParams,
         broadcast_mode: BroadcastMode,
         args: TxArgs,
-    ) -> anyhow::Result<Tx<PrettyCid>>
+    ) -> anyhow::Result<Tx<Cid>>
     where
         C: Client + Send + Sync,
     {
@@ -269,7 +268,7 @@ impl ObjectProcessor {
         Ok(())
     }
 
-    async fn generate_cid(&mut self) -> anyhow::Result<Cid> {
+    async fn generate_cid(&mut self) -> anyhow::Result<cid::Cid> {
         let chunk_size = 1024 * 1024; // size-1048576
         let mut adder = FileAdder::builder()
             .with_chunker(Chunker::Size(chunk_size))
@@ -293,8 +292,8 @@ impl ObjectProcessor {
         let (cid, _) = unixfs_iterator
             .last()
             .ok_or_else(|| anyhow!("Cannot get root CID"))?;
-        let cid =
-            Cid::try_from(cid.to_bytes()).map_err(|e| anyhow!("Cannot generate CID: {}", e))?;
+        let cid = cid::Cid::try_from(cid.to_bytes())
+            .map_err(|e| anyhow!("Cannot generate CID: {}", e))?;
         Ok(cid)
     }
 }
@@ -309,7 +308,7 @@ pub async fn process_object(
     reader: impl AsyncRead + Unpin + 'static,
     tx: Sender<Vec<u8>>,
     first_chunk: Vec<u8>,
-) -> anyhow::Result<(Cid, usize)> {
+) -> anyhow::Result<(cid::Cid, usize)> {
     let local_set = LocalSet::new();
     let mut object_processor = ObjectProcessor::new().await?;
 
@@ -428,7 +427,7 @@ mod tests {
         }
         let unixfs_iterator = adder.finish();
         let (expected_cid, _) = unixfs_iterator.last().unwrap();
-        let expected_cid = Cid::try_from(expected_cid.to_bytes()).unwrap();
+        let expected_cid = cid::Cid::try_from(expected_cid.to_bytes()).unwrap();
 
         assert_eq!(expected_cid, cid);
     }
