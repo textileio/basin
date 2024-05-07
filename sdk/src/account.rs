@@ -9,7 +9,6 @@ use fendermint_vm_actor_interface::adm::{
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{address::Address, econ::TokenAmount, METHOD_SEND};
-use ipc_provider::config::subnet::EVMSubnet;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
@@ -18,7 +17,7 @@ use adm_provider::{
 };
 use adm_signer::Signer;
 
-use crate::ipc::EvmManager;
+use crate::ipc::{manager::EvmManager, subnet::EVMSubnet};
 use crate::TxArgs;
 
 pub struct Account {}
