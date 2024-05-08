@@ -130,6 +130,7 @@ version = "0.1.0"
 dependencies = [
  "adm_provider",
  "anyhow",
+ "async-trait",
  "fendermint_crypto",
  "fendermint_vm_actor_interface",
  "fendermint_vm_message",
@@ -138,6 +139,7 @@ dependencies = [
  "fvm_shared",
  "hex",
  "ipc-api",
+ "tokio",
 ]
 
 [[package]]
