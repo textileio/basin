@@ -82,7 +82,7 @@ struct ObjectstorePutArgs {
     #[clap(default_value = "-")]
     input: FileOrStdin,
     /// Broadcast mode for the transaction.
-    #[arg(long, value_enum, env, default_value_t = BroadcastMode::Commit)]
+    #[arg(short, long, value_enum, env, default_value_t = BroadcastMode::Commit)]
     broadcast_mode: BroadcastMode,
 }
 
