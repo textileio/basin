@@ -10,7 +10,8 @@ use ethers::{
     core::k256::ecdsa::SigningKey,
     middleware::{Middleware, SignerMiddleware},
     prelude::{
-        Authorization, Http, LocalWallet, Provider, Signer as EthSigner, Wallet, I256, U256,
+        Authorization, Eip1559TransactionRequest, Http, LocalWallet, Provider, Signer as EthSigner,
+        Wallet, I256, U256,
     },
     types::TransactionReceipt,
 };
@@ -18,7 +19,7 @@ use ethers_contract::ContractCall;
 use fvm_shared::{address::Address, econ::TokenAmount};
 use gateway_manager_facet::{FvmAddress, GatewayManagerFacet, SubnetID as GatewaySubnetID};
 use ipc_actors_abis::gateway_manager_facet;
-use ipc_api::evm::payload_to_evm_address;
+use ipc_api::evm::{fil_to_eth_amount, payload_to_evm_address};
 use num_traits::ToPrimitive;
 use reqwest::{header::HeaderValue, Client};
 
@@ -104,10 +105,7 @@ fn get_gateway(
 pub struct EvmManager {}
 
 impl EvmManager {
-    pub async fn parent_balance(
-        address: Address,
-        subnet: EVMSubnet,
-    ) -> anyhow::Result<TokenAmount> {
+    pub async fn balance(address: Address, subnet: EVMSubnet) -> anyhow::Result<TokenAmount> {
         let provider = get_eth_provider(&subnet)?;
         let balance = provider
             .get_balance(payload_to_evm_address(address.payload())?, None)
@@ -132,7 +130,7 @@ impl EvmManager {
         let mut call = gateway.fund(subnet_id, FvmAddress::try_from(to)?);
         call.tx.set_value(value);
 
-        send(&gateway, call).await
+        gateway_send(&gateway, call).await
     }
 
     pub async fn withdraw(
@@ -151,11 +149,32 @@ impl EvmManager {
         let mut call = gateway.release(FvmAddress::try_from(to)?);
         call.tx.set_value(value);
 
-        send(&gateway, call).await
+        gateway_send(&gateway, call).await
+    }
+
+    pub async fn transfer(
+        signer: &impl Signer,
+        to: Address,
+        subnet: EVMSubnet,
+        amount: TokenAmount,
+    ) -> anyhow::Result<TransactionReceipt> {
+        let signer = Arc::new(get_eth_signer(signer, &subnet)?);
+
+        let (fee, fee_cap) = premium_estimation(signer.clone()).await?;
+        let tx = Eip1559TransactionRequest::new()
+            .to(payload_to_evm_address(to.payload())?)
+            .value(fil_to_eth_amount(&amount)?)
+            .max_priority_fee_per_gas(fee)
+            .max_fee_per_gas(fee_cap);
+
+        let tx_pending = signer.send_transaction(tx, None).await?;
+        tx_pending
+            .await?
+            .ok_or(anyhow!("transfer did not return receipt"))
     }
 }
 
-async fn send(
+async fn gateway_send(
     gateway: &GatewayManagerFacet<DefaultSignerMiddleware>,
     call: ContractCall<DefaultSignerMiddleware, ()>,
 ) -> anyhow::Result<TransactionReceipt> {

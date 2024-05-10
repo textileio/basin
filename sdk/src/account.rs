@@ -8,17 +8,13 @@ use fendermint_vm_actor_interface::adm::{
 };
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::RawBytes;
-use fvm_shared::{address::Address, econ::TokenAmount, METHOD_SEND};
+use fvm_shared::{address::Address, econ::TokenAmount};
 use tendermint::abci::response::DeliverTx;
-use tendermint_rpc::Client;
 
-use adm_provider::{
-    message::local_message, response::decode_bytes, BroadcastMode, Provider, QueryProvider, Tx,
-};
+use adm_provider::{message::local_message, response::decode_bytes, QueryProvider};
 use adm_signer::Signer;
 
 use crate::ipc::{manager::EvmManager, subnet::EVMSubnet};
-use crate::TxArgs;
 
 pub struct Account {}
 
@@ -53,27 +49,8 @@ impl Account {
         }
     }
 
-    pub async fn balance(
-        provider: &impl QueryProvider,
-        signer: &impl Signer,
-        height: FvmQueryHeight,
-    ) -> anyhow::Result<TokenAmount> {
-        let response = provider.actor_state(&signer.address(), height).await?;
-
-        match response.value {
-            Some((_, state)) => Ok(state.balance),
-            None => Err(anyhow!(
-                "failed to get balance; actor {} cannot be found",
-                signer.address()
-            )),
-        }
-    }
-
-    pub async fn parent_balance(
-        signer: &impl Signer,
-        subnet: EVMSubnet,
-    ) -> anyhow::Result<TokenAmount> {
-        EvmManager::parent_balance(signer.address(), subnet).await
+    pub async fn balance(signer: &impl Signer, subnet: EVMSubnet) -> anyhow::Result<TokenAmount> {
+        EvmManager::balance(signer.address(), subnet).await
     }
 
     pub async fn deposit(
@@ -94,27 +71,13 @@ impl Account {
         EvmManager::withdraw(signer, to, subnet, amount).await
     }
 
-    pub async fn transfer<C>(
-        provider: &impl Provider<C>,
-        signer: &mut impl Signer,
+    pub async fn transfer(
+        signer: &impl Signer,
         to: Address,
+        subnet: EVMSubnet,
         amount: TokenAmount,
-        args: TxArgs,
-    ) -> anyhow::Result<Tx<()>>
-    where
-        C: Client + Send + Sync,
-    {
-        let message = signer.transaction(
-            to,
-            amount,
-            METHOD_SEND,
-            RawBytes::default(),
-            None,
-            args.gas_params,
-        )?;
-        provider
-            .perform(message, BroadcastMode::Commit, |_| Ok(()))
-            .await
+    ) -> anyhow::Result<TransactionReceipt> {
+        EvmManager::transfer(signer, to, subnet, amount).await
     }
 }
 
