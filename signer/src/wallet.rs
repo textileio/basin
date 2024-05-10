@@ -138,7 +138,8 @@ impl Wallet {
     }
 
     /// Set the sequence to an arbitrary value.
-    pub fn set_sequence(&mut self, sequence: u64) {
-        self.sequence = Arc::new(Mutex::new(sequence));
+    pub async fn set_sequence(&mut self, sequence: u64) {
+        let mut sequence_guard = self.sequence.lock().await;
+        *sequence_guard = sequence;
     }
 }
