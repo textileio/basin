@@ -31,9 +31,7 @@ enum AccountCommands {
     /// Get account sequence in a subnet.
     Sequence(AddressArgs),
     /// Get account balance in a subnet.
-    Balance(AddressArgs),
-    /// Get account balance on subnet's parent.
-    ParentBalance(ParentBalanceArgs),
+    Balance(BalanceArgs),
     /// Deposit funds into a subnet from its parent.
     Deposit(FundArgs),
     /// Withdraw funds from a subnet to its parent.
@@ -50,29 +48,6 @@ struct AddressArgs {
     /// Owner address. The signer address is used if no address is given.
     #[arg(short, long, value_parser = parse_address)]
     address: Option<Address>,
-}
-
-#[derive(Clone, Debug, Args)]
-struct ParentBalanceArgs {
-    #[command(flatten)]
-    address: AddressArgs,
-    #[command(flatten)]
-    subnet: SubnetArgs,
-}
-
-#[derive(Clone, Debug, Args)]
-pub struct FundArgs {
-    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
-    #[arg(short, long, env, value_parser = parse_secret_key)]
-    private_key: SecretKey,
-    /// The recipient account address. If not present, the signer address is used.
-    #[arg(long, value_parser = parse_address)]
-    to: Option<Address>,
-    /// The amount to transfer in FIL.
-    #[arg(value_parser = parse_token_amount)]
-    amount: TokenAmount,
-    #[command(flatten)]
-    subnet: SubnetArgs,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -95,6 +70,32 @@ pub struct SubnetArgs {
 }
 
 #[derive(Clone, Debug, Args)]
+struct BalanceArgs {
+    /// The Ethereum API rpc http endpoint.
+    #[arg(long, default_value_t = false)]
+    parent: bool,
+    #[command(flatten)]
+    address: AddressArgs,
+    #[command(flatten)]
+    subnet: SubnetArgs,
+}
+
+#[derive(Clone, Debug, Args)]
+pub struct FundArgs {
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: SecretKey,
+    /// The recipient account address. If not present, the signer address is used.
+    #[arg(long, value_parser = parse_address)]
+    to: Option<Address>,
+    /// The amount to transfer in FIL.
+    #[arg(value_parser = parse_token_amount)]
+    amount: TokenAmount,
+    #[command(flatten)]
+    subnet: SubnetArgs,
+}
+
+#[derive(Clone, Debug, Args)]
 pub struct TransferArgs {
     /// Wallet private key (ECDSA, secp256k1) for signing transactions.
     #[arg(short, long, env, value_parser = parse_secret_key)]
@@ -105,6 +106,8 @@ pub struct TransferArgs {
     /// The amount to transfer in FIL.
     #[arg(value_parser = parse_token_amount)]
     amount: TokenAmount,
+    #[command(flatten)]
+    subnet: SubnetArgs,
 }
 
 pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> {
@@ -134,16 +137,13 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             print_json(&json!({"sequence": sequence}))
         }
         AccountCommands::Balance(args) => {
-            let address = get_address(args.clone(), &subnet_id)?;
-            let balance =
-                Account::balance(&provider, &Void::new(address), FvmQueryHeight::Committed).await?;
-
-            print_json(&json!({"balance": balance.to_string()}))
-        }
-        AccountCommands::ParentBalance(args) => {
             let address = get_address(args.address.clone(), &subnet_id)?;
-            let config = get_parent_subnet_config(&cli, &subnet_id, args.subnet.clone())?;
-            let balance = Account::parent_balance(&Void::new(address), config).await?;
+            let config = if args.parent {
+                get_parent_subnet_config(&cli, &subnet_id, args.subnet.clone())?
+            } else {
+                get_subnet_config(&cli, &subnet_id, args.subnet.clone())?
+            };
+            let balance = Account::balance(&Void::new(address), config).await?;
 
             print_json(&json!({"balance": balance.to_string()}))
         }
@@ -183,18 +183,12 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             print_json(&tx)
         }
         AccountCommands::Transfer(args) => {
-            let mut signer =
-                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
-            signer.init_sequence(&provider).await?;
+            let config = get_subnet_config(&cli, &subnet_id, args.subnet.clone())?;
 
-            let tx = Account::transfer(
-                &provider,
-                &mut signer,
-                args.to,
-                args.amount.clone(),
-                Default::default(),
-            )
-            .await?;
+            let signer =
+                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+
+            let tx = Account::transfer(&signer, args.to, config, args.amount.clone()).await?;
 
             print_json(&tx)
         }

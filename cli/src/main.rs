@@ -25,7 +25,7 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
     /// Network presets for subnet and RPC URLs.
-    #[arg(long, value_enum, env, default_value_t = Network::Testnet)]
+    #[arg(short, long, env, value_enum, default_value_t = Network::Testnet)]
     network: Network,
     /// The ID of the target subnet.
     #[arg(short, long, env)]
