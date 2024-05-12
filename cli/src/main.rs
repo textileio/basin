@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 // TODO: Handle gas options
-// TODO: Handle broadcast mode options
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum, Args};
+use fvm_shared::{bigint::BigInt, econ::TokenAmount};
 use serde::Serialize;
+use std::str::FromStr;
 use stderrlog::Timestamp;
 use tendermint_rpc::Url;
 
@@ -91,6 +92,23 @@ impl BroadcastMode {
             BroadcastMode::Async => SDKBroadcastMode::Async,
         }
     }
+}
+
+#[derive(Clone, Debug, Args)]
+struct GasArgs {
+    /// Gas limit for the transaction
+    #[arg(long, env)]
+    gas_limit: Option<u64>,
+    /// Maximum gas fee for the transaction.
+    #[arg(long, env, value_parser = parse_token_amount)]
+    gas_fee_cap: Option<TokenAmount>,
+    /// Gas premium for the transaction.
+    #[arg(long, env, value_parser = parse_token_amount)]
+    gas_premium: Option<TokenAmount>,
+}
+
+pub fn parse_token_amount(value: &str) -> anyhow::Result<TokenAmount> {
+    Ok(TokenAmount::from_atto(BigInt::from_str(value)?))
 }
 
 #[tokio::main]
