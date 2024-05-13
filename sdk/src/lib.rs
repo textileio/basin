@@ -11,9 +11,6 @@ pub mod network;
 /// Arguments common to transactions.
 #[derive(Clone, Default, Debug)]
 pub struct TxArgs {
-    /// Sender account sequence (nonce).
-    // pub sequence: Option<u64>,
-
     /// Gas params.
     pub gas_params: GasParams,
 }
