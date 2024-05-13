@@ -12,8 +12,10 @@ version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 fnv = { workspace = true }
 hex = { workspace = true }
+tokio = { workspace = true }
 
 fvm_ipld_encoding = { workspace = true }
 fvm_shared = { workspace = true }

@@ -18,21 +18,18 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
 use tendermint_rpc::Url;
 use tokio::{
-    fs::File,
     io::{self, AsyncReadExt, AsyncWriteExt},
     sync::mpsc,
 };
 
-use adm_provider::{
-    json_rpc::JsonRpcProvider, object::ObjectClient, util::parse_address, BroadcastMode,
-};
+use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, util::parse_address};
 use adm_sdk::machine::{
     objectstore::{self, ObjectStore},
     Machine,
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
-use crate::{get_rpc_url, get_subnet_id, print_json, Cli};
+use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli};
 
 const MAX_INTERNAL_OBJECT_LENGTH: u64 = 1024;
 
@@ -84,6 +81,9 @@ struct ObjectstorePutArgs {
     /// Input file (or stdin) containing the object to upload.
     #[clap(default_value = "-")]
     input: FileOrStdin,
+    /// Broadcast mode for the transaction.
+    #[arg(short, long, value_enum, env, default_value_t = BroadcastMode::Commit)]
+    broadcast_mode: BroadcastMode,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -97,9 +97,6 @@ struct ObjectstoreGetArgs {
     /// Key of the object to get.
     #[arg(short, long)]
     key: String,
-    /// Output file path for download
-    #[arg(short, long)]
-    output: String,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -148,7 +145,9 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             address,
             overwrite,
             input,
+            broadcast_mode,
         }) => {
+            let broadcast_mode = broadcast_mode.get();
             let mut signer = Wallet::new_secp256k1(
                 private_key.clone(),
                 AccountKind::Ethereum,
@@ -207,7 +206,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             &provider,
                             &mut signer,
                             params,
-                            BroadcastMode::Commit,
+                            broadcast_mode,
                             Default::default(),
                         )
                         .await?;
@@ -218,7 +217,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     // internal object
                     if e.kind() == io::ErrorKind::UnexpectedEof {
                         reader.read_to_end(&mut first_chunk).await?;
-
                         let tx = machine
                             .put(
                                 &provider,
@@ -228,7 +226,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                                     kind: ObjectKind::Internal(ByteBuf(first_chunk)),
                                     overwrite: *overwrite,
                                 },
-                                BroadcastMode::Commit,
+                                broadcast_mode,
                                 Default::default(),
                             )
                             .await?;
@@ -280,14 +278,11 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         // since we have decided to keep the GET APIs intact for a while.
                         // If we decide to remove these APIs we can move to Object API
                         // for downloading the file with CID.
-                        // TODO (avichal): To match the put UX, can we replace output file with stdout?
-                        // TODO (avichal): ie, use `>` operator on command line? Seems more flexible.
-                        let file = File::create(args.output.clone()).await?;
                         machine
-                            .download(object_client, key.to_string(), file)
+                            .download(object_client, key.to_string(), io::stdout())
                             .await?;
 
-                        progress_bar.show_downloaded(cid, args.output.clone());
+                        progress_bar.show_downloaded(cid);
                         progress_bar.finish();
 
                         Ok(())
@@ -391,14 +386,9 @@ impl ObjectProgressBar {
         }
     }
 
-    fn show_downloaded(&self, cid: Cid, path: String) {
+    fn show_downloaded(&self, cid: Cid) {
         if let Some(bar) = &self.inner {
-            bar.println(format!(
-                "{}  Downloaded object {} at {}",
-                Emoji("✅", ""),
-                cid,
-                path
-            ));
+            bar.println(format!("{}  Downloaded object {}", Emoji("✅", ""), cid,));
         }
     }
 
