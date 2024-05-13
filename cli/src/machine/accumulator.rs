@@ -90,12 +90,9 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
         }) => {
             let mut signer =
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
-
-            // TODO: read seq locally from a file
-            // TODO: only init in case local nonce is not available
             signer.init_sequence(&provider).await?;
 
-            let write_access = if public_write.to_owned() {
+            let write_access = if public_write.clone() {
                 WriteAccess::Public
             } else {
                 WriteAccess::OnlyOwner
