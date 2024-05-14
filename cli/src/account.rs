@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
-    util::{parse_address, parse_token_amount_from_nano},
+    util::{parse_address, parse_token_amount},
 };
 use adm_sdk::{account::Account, ipc::subnet::EVMSubnet};
 use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Void, Wallet};
@@ -89,7 +89,7 @@ pub struct FundArgs {
     #[arg(long, value_parser = parse_address)]
     to: Option<Address>,
     /// The amount to transfer in FIL.
-    #[arg(value_parser = parse_token_amount_from_nano)]
+    #[arg(value_parser = parse_token_amount)]
     amount: TokenAmount,
     #[command(flatten)]
     subnet: SubnetArgs,
@@ -104,7 +104,7 @@ pub struct TransferArgs {
     #[arg(long, value_parser = parse_address)]
     to: Address,
     /// The amount to transfer in FIL.
-    #[arg(value_parser = parse_token_amount_from_nano)]
+    #[arg(value_parser = parse_token_amount)]
     amount: TokenAmount,
     #[command(flatten)]
     subnet: SubnetArgs,
