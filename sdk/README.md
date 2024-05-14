@@ -1,22 +1,23 @@
 # ADM SDK
 
-[![License](https://img.shields.io/github/license/amazingdatamachine/adm.svg)](../LICENSE)
+[![License](https://img.shields.io/github/license/textileio/basin.svg)](../LICENSE)
 [![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg)](https://github.com/RichardLitt/standard-readme)
 
-> The Amazing Data Machine (ADM) SDK
+> Basin (ADM) SDK
 
 <!-- omit from toc -->
+
 ## Table of Contents
 
 - [Background](#background)
-  - [Prerequisites](#prerequisites)
+    - [Prerequisites](#prerequisites)
 - [Usage](#usage)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Background
 
-The ADM SDK is a library for managing your account and data machines.
+The ADM SDK is a library for managing accounts and data machines.
 
 - _Machine manager_:
   This singleton machine is responsible for creating new object stores and/or accumulators.
@@ -66,7 +67,7 @@ The `adm` crates haven't been published yet, but you can use `adm_sdk` as a git 
 
 ```toml
 [dependencies]
-adm_sdk = { git = "https://github.com/amazingdatamachine/adm.git" }
+adm_sdk = { git = "https://github.com/textileio/basin.git" }
 ```
 
 > [!NOTE]

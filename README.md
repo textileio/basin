@@ -1,9 +1,11 @@
-# The Amazing Data Machine (ADM)
+# Basin
 
-[![License](https://img.shields.io/github/license/amazingdatamachine/adm.svg)](./LICENSE)
+[![License](https://img.shields.io/github/license/textileio/basin.svg)](./LICENSE)
 [![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg)](https://github.com/RichardLitt/standard-readme)
 
-> ADM network interfaces & tooling for scalable subnets & onchain data storage.
+> Basin network interfaces & tooling for scalable subnets & onchain data storage.
+
+_Note_: Basin is referred to by our codename "ADM" throughout this repo.
 
 ## Table of Contents
 
@@ -34,7 +36,8 @@
 
 ## Background
 
-ADM is a decentralized data layer, enabled by subnets that are purpose built for onchain data storage.
+Basin (referred to as the ADM throughout this repo) is a decentralized data layer, enabled by subnets that are purpose
+built for onchain data storage.
 It is built on top of the Filecoin Virtual Machine (FVM) and provides a horizontally scalable, verifiable, and
 cost-effective data availability layer for onchain applications, networks (e.g., DePINs), and services.
 The first _data Layer 2 (L2)_.
@@ -228,8 +231,8 @@ There are a few limitations and behaviors of which to be aware when using the AD
 ## Development
 
 When developing against a local network, be sure to set the `--network` (or `NETWORK`) to `devnet`. This presumes you
-have a local-only setup running, provided by the [`ipc`](https://github.com/amazingdatamachine/ipc) repo and custom
-contracts in [`builtin-actors`](https://github.com/amazingdatamachine/builtin-actors).
+have a local-only setup running, provided by the [`ipc`](https://github.com/textileio/ipc) repo and custom
+contracts in [`builtin-actors`](https://github.com/textileio/builtin-actors).
 
 All the available commands include:
 
