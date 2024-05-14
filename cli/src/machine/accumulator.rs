@@ -11,11 +11,8 @@ use fvm_shared::address::Address;
 use serde_json::json;
 use tokio::io::AsyncReadExt;
 
-use adm_provider::{json_rpc::JsonRpcProvider, message::GasParams, util::parse_address};
-use adm_sdk::{
-    machine::{accumulator::Accumulator, Machine},
-    TxArgs,
-};
+use adm_provider::{json_rpc::JsonRpcProvider, util::parse_address};
+use adm_sdk::machine::{accumulator::Accumulator, Machine};
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
 use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, GasArgs};
@@ -81,12 +78,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
         AccumulatorCommands::Create(AccumulatorCreateArgs {
             private_key,
             public_write,
-            gas_args:
-                GasArgs {
-                    gas_limit,
-                    gas_fee_cap,
-                    gas_premium,
-                },
+            gas_args,
         }) => {
             let mut signer =
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
@@ -97,15 +89,9 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             } else {
                 WriteAccess::OnlyOwner
             };
-            let tx_args = TxArgs {
-                gas_params: GasParams {
-                    gas_limit: gas_limit.unwrap_or(fvm_shared::BLOCK_GAS_LIMIT),
-                    gas_fee_cap: gas_fee_cap.clone().unwrap_or_default(),
-                    gas_premium: gas_premium.clone().unwrap_or_default(),
-                },
-            };
             let (store, tx) =
-                Accumulator::new(&provider, &mut signer, write_access, tx_args).await?;
+                Accumulator::new(&provider, &mut signer, write_access, gas_args.new_tx_args())
+                    .await?;
 
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
@@ -114,12 +100,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             address,
             input,
             broadcast_mode,
-            gas_args:
-                GasArgs {
-                    gas_limit,
-                    gas_fee_cap,
-                    gas_premium,
-                },
+            gas_args,
         }) => {
             let mut signer =
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
@@ -133,16 +114,14 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             let payload = Bytes::from(buf);
 
             let broadcast_mode = broadcast_mode.get();
-
-            let tx_args = TxArgs {
-                gas_params: GasParams {
-                    gas_limit: gas_limit.unwrap_or(fvm_shared::BLOCK_GAS_LIMIT),
-                    gas_fee_cap: gas_fee_cap.clone().unwrap_or_default(),
-                    gas_premium: gas_premium.clone().unwrap_or_default(),
-                },
-            };
             let tx = machine
-                .push(&provider, &mut signer, payload, broadcast_mode, tx_args)
+                .push(
+                    &provider,
+                    &mut signer,
+                    payload,
+                    broadcast_mode,
+                    gas_args.new_tx_args(),
+                )
                 .await?;
 
             print_json(&tx)

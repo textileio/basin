@@ -22,15 +22,10 @@ use tokio::{
     sync::mpsc,
 };
 
-use adm_provider::{
-    json_rpc::JsonRpcProvider, message::GasParams, object::ObjectClient, util::parse_address,
-};
-use adm_sdk::{
-    machine::{
-        objectstore::{self, ObjectStore},
-        Machine,
-    },
-    TxArgs,
+use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, util::parse_address};
+use adm_sdk::machine::{
+    objectstore::{self, ObjectStore},
+    Machine,
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
@@ -135,12 +130,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
         ObjectstoreCommands::Create(ObjectstoreCreateArgs {
             private_key,
             public_write,
-            gas_args:
-                GasArgs {
-                    gas_limit,
-                    gas_fee_cap,
-                    gas_premium,
-                },
+            gas_args,
         }) => {
             let mut signer =
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
@@ -151,15 +141,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             } else {
                 WriteAccess::OnlyOwner
             };
-            let tx_args = TxArgs {
-                gas_params: GasParams {
-                    gas_limit: gas_limit.unwrap_or(fvm_shared::BLOCK_GAS_LIMIT),
-                    gas_fee_cap: gas_fee_cap.clone().unwrap_or_default(),
-                    gas_premium: gas_premium.clone().unwrap_or_default(),
-                },
-            };
             let (store, tx) =
-                ObjectStore::new(&provider, &mut signer, write_access, tx_args).await?;
+                ObjectStore::new(&provider, &mut signer, write_access, gas_args.new_tx_args()).await?;
 
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
@@ -171,12 +154,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             overwrite,
             input,
             broadcast_mode,
-            gas_args:
-                GasArgs {
-                    gas_limit,
-                    gas_fee_cap,
-                    gas_premium,
-                },
+            gas_args,
         }) => {
             let broadcast_mode = broadcast_mode.get();
             let mut signer = Wallet::new_secp256k1(
@@ -232,15 +210,14 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         kind: ObjectKind::External(object_cid),
                         overwrite: *overwrite,
                     };
-                    let tx_args = TxArgs {
-                        gas_params: GasParams {
-                            gas_limit: gas_limit.unwrap_or(fvm_shared::BLOCK_GAS_LIMIT),
-                            gas_fee_cap: gas_fee_cap.clone().unwrap_or_default(),
-                            gas_premium: gas_premium.clone().unwrap_or_default(),
-                        },
-                    };
                     let tx = machine
-                        .put(&provider, &mut signer, params, broadcast_mode, tx_args)
+                        .put(
+                            &provider,
+                            &mut signer,
+                            params,
+                            broadcast_mode,
+                            gas_args.new_tx_args(),
+                        )
                         .await?;
 
                     print_json(&tx)
@@ -248,13 +225,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 Err(e) => {
                     // internal object
                     if e.kind() == io::ErrorKind::UnexpectedEof {
-                        let tx_args = TxArgs {
-                            gas_params: GasParams {
-                                gas_limit: gas_limit.unwrap_or(fvm_shared::BLOCK_GAS_LIMIT),
-                                gas_fee_cap: gas_fee_cap.clone().unwrap_or_default(),
-                                gas_premium: gas_premium.clone().unwrap_or_default(),
-                            },
-                        };
                         reader.read_to_end(&mut first_chunk).await?;
                         let tx = machine
                             .put(
@@ -266,7 +236,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                                     overwrite: *overwrite,
                                 },
                                 broadcast_mode,
-                                tx_args,
+                                gas_args.new_tx_args(),
                             )
                             .await?;
                         upload_progress.finish();

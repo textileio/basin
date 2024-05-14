@@ -1,17 +1,19 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-// TODO: Handle gas options
-
-use clap::{Parser, Subcommand, ValueEnum, Args};
-use fvm_shared::{bigint::BigInt, econ::TokenAmount};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use fvm_shared::econ::TokenAmount;
 use serde::Serialize;
-use std::str::FromStr;
 use stderrlog::Timestamp;
 use tendermint_rpc::Url;
 
-use adm_provider::BroadcastMode as SDKBroadcastMode;
-use adm_sdk::network::{use_testnet_addresses, Network as SdkNetwork};
+use adm_provider::{
+    message::GasParams, util::parse_token_amount_from_atto, BroadcastMode as SDKBroadcastMode,
+};
+use adm_sdk::{
+    network::{use_testnet_addresses, Network as SdkNetwork},
+    TxArgs,
+};
 use adm_signer::SubnetID;
 
 use crate::account::{handle_account, AccountArgs};
@@ -96,19 +98,30 @@ impl BroadcastMode {
 
 #[derive(Clone, Debug, Args)]
 struct GasArgs {
-    /// Gas limit for the transaction
+    /// Gas limit for the transaction.
     #[arg(long, env)]
     gas_limit: Option<u64>,
-    /// Maximum gas fee for the transaction.
-    #[arg(long, env, value_parser = parse_token_amount)]
+    /// Maximum gas fee for the transaction in attoFIL.
+    /// 1FIL = 10**18 attoFIL.
+    #[arg(long, env, value_parser = parse_token_amount_from_atto)]
     gas_fee_cap: Option<TokenAmount>,
-    /// Gas premium for the transaction.
-    #[arg(long, env, value_parser = parse_token_amount)]
+    /// Gas premium for the transaction in attoFIL.
+    /// 1FIL = 10**18 attoFIL.
+    #[arg(long, env, value_parser = parse_token_amount_from_atto)]
     gas_premium: Option<TokenAmount>,
 }
 
-pub fn parse_token_amount(value: &str) -> anyhow::Result<TokenAmount> {
-    Ok(TokenAmount::from_atto(BigInt::from_str(value)?))
+impl GasArgs {
+    /// Returns transaction arguments from the gas arguments.
+    pub fn new_tx_args(&self) -> TxArgs {
+        TxArgs {
+            gas_params: GasParams {
+                gas_limit: self.gas_limit.unwrap_or(fvm_shared::BLOCK_GAS_LIMIT),
+                gas_fee_cap: self.gas_fee_cap.clone().unwrap_or_default(),
+                gas_premium: self.gas_premium.clone().unwrap_or_default(),
+            },
+        }
+    }
 }
 
 #[tokio::main]
