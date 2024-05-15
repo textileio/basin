@@ -11,8 +11,10 @@ pub mod network;
 /// Arguments common to transactions.
 #[derive(Clone, Default, Debug)]
 pub struct TxArgs {
+    // TODO: Add sequence in CLI flags
     /// Sender account sequence (nonce).
-    pub sequence: Option<u64>,
+    // pub sequence: Option<u64>,
+
     /// Gas params.
     pub gas_params: GasParams,
 }
