@@ -139,6 +139,9 @@ dependencies = [
  "fvm_shared",
  "hex",
  "ipc-api",
+ "rand",
+ "serde_json",
+ "tendermint-rpc",
  "tokio",
 ]
 

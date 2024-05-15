@@ -12,7 +12,7 @@ use adm_provider::{
 };
 use adm_sdk::{
     network::{use_testnet_addresses, Network as SdkNetwork},
-    TxArgs,
+    TxParams,
 };
 use adm_signer::SubnetID;
 
@@ -97,7 +97,7 @@ impl BroadcastMode {
 }
 
 #[derive(Clone, Debug, Args)]
-struct GasArgs {
+struct TxArgs {
     /// Gas limit for the transaction.
     #[arg(long, env)]
     gas_limit: Option<u64>,
@@ -109,12 +109,16 @@ struct GasArgs {
     /// 1FIL = 10**18 attoFIL.
     #[arg(long, env, value_parser = parse_token_amount_from_atto)]
     gas_premium: Option<TokenAmount>,
+    /// Sequence for the transaction.
+    #[arg(long)]
+    sequence: Option<u64>,
 }
 
-impl GasArgs {
-    /// Returns transaction arguments from the gas arguments.
-    pub fn new_tx_args(&self) -> TxArgs {
-        TxArgs {
+impl TxArgs {
+    /// Creates transaction params from tx related CLI arguments.
+    pub fn to_tx_params(&self) -> TxParams {
+        TxParams {
+            sequence: self.sequence,
             gas_params: GasParams {
                 gas_limit: self.gas_limit.unwrap_or(fvm_shared::BLOCK_GAS_LIMIT),
                 gas_fee_cap: self.gas_fee_cap.clone().unwrap_or_default(),

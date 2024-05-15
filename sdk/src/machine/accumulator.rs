@@ -15,13 +15,12 @@ use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
 use adm_provider::{
-    message::local_message, response::decode_bytes, response::decode_cid, response::Cid,
-    BroadcastMode, Provider, QueryProvider, Tx,
+    message::local_message, message::GasParams, response::decode_bytes, response::decode_cid,
+    response::Cid, BroadcastMode, Provider, QueryProvider, Tx,
 };
 use adm_signer::Signer;
 
 use crate::machine::{deploy_machine, DeployTx, Machine};
-use crate::TxArgs;
 
 const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 
@@ -51,13 +50,13 @@ impl Machine for Accumulator {
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
-        args: TxArgs,
+        gas_params: GasParams,
     ) -> anyhow::Result<(Self, DeployTx)>
     where
         C: Client + Send + Sync,
     {
         let (address, tx) =
-            deploy_machine(provider, signer, Kind::Accumulator, write_access, args).await?;
+            deploy_machine(provider, signer, Kind::Accumulator, write_access, gas_params).await?;
         Ok((Self::attach(address), tx))
     }
 
@@ -77,7 +76,7 @@ impl Accumulator {
         signer: &mut impl Signer,
         payload: Bytes,
         broadcast_mode: BroadcastMode,
-        args: TxArgs,
+        gas_params: GasParams,
     ) -> anyhow::Result<Tx<PushReturn>>
     where
         C: Client + Send + Sync,
@@ -90,14 +89,16 @@ impl Accumulator {
         }
 
         let params = RawBytes::serialize(BytesSer(&payload))?;
-        let message = signer.transaction(
-            self.address,
-            Default::default(),
-            Push as u64,
-            params,
-            None,
-            args.gas_params,
-        ).await?;
+        let message = signer
+            .transaction(
+                self.address,
+                Default::default(),
+                Push as u64,
+                params,
+                None,
+                gas_params,
+            )
+            .await?;
         provider
             .perform(message, broadcast_mode, decode_acc_push_return)
             .await

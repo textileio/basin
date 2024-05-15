@@ -15,11 +15,11 @@ use tendermint::{abci::response::DeliverTx, block::Height, Hash};
 use tendermint_rpc::Client;
 
 use adm_provider::{
-    message::local_message, response::decode_bytes, BroadcastMode, Provider, QueryProvider,
+    message::{local_message, GasParams},
+    response::decode_bytes,
+    BroadcastMode, Provider, QueryProvider,
 };
 use adm_signer::Signer;
-
-use crate::TxArgs;
 
 pub mod accumulator;
 pub mod objectstore;
@@ -37,7 +37,7 @@ pub trait Machine: Send + Sync + Sized {
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
-        args: TxArgs,
+        gas_params: GasParams,
     ) -> anyhow::Result<(Self, DeployTx)>
     where
         C: Client + Send + Sync;
@@ -66,21 +66,23 @@ async fn deploy_machine<C>(
     signer: &mut impl Signer,
     kind: Kind,
     write_access: WriteAccess,
-    args: TxArgs,
+    gas_params: GasParams,
 ) -> anyhow::Result<(Address, DeployTx)>
 where
     C: Client + Send + Sync,
 {
     let params = CreateExternalParams { kind, write_access };
     let params = RawBytes::serialize(params)?;
-    let message = signer.transaction(
-        ADM_ACTOR_ADDR,
-        Default::default(),
-        CreateExternal as u64,
-        params,
-        None,
-        args.gas_params,
-    ).await?;
+    let message = signer
+        .transaction(
+            ADM_ACTOR_ADDR,
+            Default::default(),
+            CreateExternal as u64,
+            params,
+            None,
+            gas_params,
+        )
+        .await?;
     let tx = provider
         .perform(message, BroadcastMode::Commit, decode_create)
         .await?;
