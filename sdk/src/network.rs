@@ -10,7 +10,7 @@ use tendermint_rpc::Url;
 use adm_provider::util::parse_address;
 use adm_signer::SubnetID;
 
-const TESTNET_SUBNET_ID: &str = "/r314159/t410ftytqyw4taos3b2grmyq4cvhgvvth3aehutsdjvy";
+const TESTNET_SUBNET_ID: &str = "/r314159/t410f7x4mh62k6oymmd3rfdjnzyjid7p2tstnbuvnc4i";
 const DEVNET_SUBNET_ID: &str = "test";
 
 const TESTNET_RPC_URL: &str = "https://api.n1.testnet.basin.storage";
@@ -21,8 +21,8 @@ const TESTNET_EVM_GATEWAY_ADDRESS: &str = "0x77aa40b105843728088c0132e43fc443488
 const TESTNET_EVM_REGISTRY_ADDRESS: &str = "0x74539671a1d2f1c8f200826baba665179f53a1b7";
 
 const TESTNET_PARENT_EVM_RPC_URL: &str = "https://api.calibration.node.glif.io/rpc/v1";
-const TESTNET_PARENT_EVM_GATEWAY_ADDRESS: &str = "0xC1D4E8db509e22B3f7Af22fE48ca4bCEaA9f44BB";
-const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x310a14a88f79C419EAe66fBFB76190a17a862b83";
+const TESTNET_PARENT_EVM_GATEWAY_ADDRESS: &str = "0x728F3B71EBD1358973AbCE325Fe45f7f701ea7e6";
+const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x2f71A1d47ccc2E13E646D4C1bcF89E3409114De8";
 
 const TESTNET_OBJECT_API_URL: &str = "https://object-api.n1.testnet.basin.storage";
 const DEVNET_OBJECT_API_URL: &str = "http://127.0.0.1:8001";
