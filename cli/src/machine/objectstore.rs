@@ -22,7 +22,11 @@ use tokio::{
     sync::mpsc,
 };
 
-use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, util::parse_address};
+use adm_provider::{
+    json_rpc::JsonRpcProvider,
+    object::ObjectClient,
+    util::{parse_address, parse_query_height},
+};
 use adm_sdk::{
     machine::{
         objectstore::{self, ObjectStore},
@@ -74,7 +78,7 @@ struct ObjectstorePutArgs {
     /// Node Object API URL.
     #[arg(long, env)]
     object_api_url: Option<Url>,
-    /// Machine address of the object store.
+    /// Object store machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
     /// Key of the object to upload.
@@ -94,26 +98,38 @@ struct ObjectstorePutArgs {
 }
 
 #[derive(Clone, Debug, Args)]
+struct ObjectstoreAddressArgs {
+    /// Object store machine address.
+    #[arg(short, long, value_parser = parse_address)]
+    address: Address,
+    /// Query block height.
+    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
+}
+
+#[derive(Clone, Debug, Args)]
 struct ObjectstoreGetArgs {
     /// Node Object API URL.
     #[arg(long, env)]
     object_api_url: Option<Url>,
-    /// Machine address of the object store.
+    /// Object store machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
     /// Key of the object to get.
-    #[arg(short, long)]
     key: String,
     /// Range of bytes to get from the object.
     /// Format: "start-end" (inclusive).
     /// Example: "0-99" (first 100 bytes).
     #[arg(short, long)]
     range: Option<String>,
+    /// Query block height.
+    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
 }
 
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreListArgs {
-    /// Machine address of the object store.
+    /// Object store machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
     /// The prefix to filter objects by.
@@ -128,6 +144,9 @@ struct ObjectstoreListArgs {
     /// The maximum number of objects to list. '0' indicates max (10k).
     #[arg(short, long, default_value_t = 0)]
     limit: u64,
+    /// Query block height.
+    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
 }
 
 pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Result<()> {
@@ -148,7 +167,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
             signer.set_sequence(sequence, &provider).await?;
 
-            let write_access = if public_write.clone() {
+            let write_access = if *public_write {
                 WriteAccess::Public
             } else {
                 WriteAccess::OnlyOwner
@@ -267,7 +286,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     GetParams {
                         key: key.as_bytes().to_vec(),
                     },
-                    FvmQueryHeight::Committed,
+                    args.height,
                 )
                 .await?;
 
@@ -303,7 +322,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
 
                         // The `download` method is currently using /objectstore API
                         // since we have decided to keep the GET APIs intact for a while.
-                        // If we decide to remove these APIs we can move to Object API
+                        // If we decide to remove these APIs, we can move to Object API
                         // for downloading the file with CID.
                         machine
                             .download(
@@ -338,7 +357,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         offset: args.offset,
                         limit: args.limit,
                     },
-                    FvmQueryHeight::Committed,
+                    args.height,
                 )
                 .await?;
 

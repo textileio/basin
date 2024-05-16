@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
-    util::{parse_address, parse_token_amount},
+    util::{parse_address, parse_query_height, parse_token_amount},
 };
 use adm_sdk::{account::Account, ipc::subnet::EVMSubnet};
 use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Void, Wallet};
@@ -48,6 +48,9 @@ struct AddressArgs {
     /// Owner address. The signer address is used if no address is given.
     #[arg(short, long, value_parser = parse_address)]
     address: Option<Address>,
+    /// Query block height.
+    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -117,9 +120,7 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
     match &args.command {
         AccountCommands::Machines(args) => {
             let address = get_address(args.clone(), &subnet_id)?;
-            let metadata =
-                Account::machines(&provider, &Void::new(address), FvmQueryHeight::Committed)
-                    .await?;
+            let metadata = Account::machines(&provider, &Void::new(address), args.height).await?;
 
             let metadata = metadata
                 .iter()
@@ -130,9 +131,7 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
         }
         AccountCommands::Sequence(args) => {
             let address = get_address(args.clone(), &subnet_id)?;
-            let sequence =
-                Account::sequence(&provider, &Void::new(address), FvmQueryHeight::Committed)
-                    .await?;
+            let sequence = Account::sequence(&provider, &Void::new(address), args.height).await?;
 
             print_json(&json!({"sequence": sequence}))
         }
