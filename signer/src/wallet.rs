@@ -127,7 +127,8 @@ impl Wallet {
 
         match res.value {
             Some((_, state)) => {
-                self.sequence = Arc::new(Mutex::new(state.sequence));
+                let mut sequence_guard = self.sequence.lock().await;
+                *sequence_guard = state.sequence;
                 Ok(())
             }
             None => Err(anyhow!(

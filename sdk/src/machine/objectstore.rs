@@ -187,10 +187,11 @@ impl ObjectStore {
         &self,
         object_client: impl ObjectService,
         key: String,
+        range: Option<String>,
         writer: impl AsyncWrite + Unpin + Send + 'static,
     ) -> anyhow::Result<()> {
         object_client
-            .download(self.address.to_string(), key, writer)
+            .download(self.address.to_string(), key, range, writer)
             .await?;
         Ok(())
     }

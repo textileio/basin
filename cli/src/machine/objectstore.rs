@@ -32,7 +32,7 @@ use adm_sdk::{
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
-use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, TxArgs};
+use crate::{get_rpc_url, get_subnet_id, parse_range_arg, print_json, BroadcastMode, Cli, TxArgs};
 
 const MAX_INTERNAL_OBJECT_LENGTH: u64 = 1024;
 
@@ -104,6 +104,11 @@ struct ObjectstoreGetArgs {
     /// Key of the object to get.
     #[arg(short, long)]
     key: String,
+    /// Range of bytes to get from the object.
+    /// Format: "start-end" (inclusive).
+    /// Example: "0-99" (first 100 bytes).
+    #[arg(short, long)]
+    range: Option<String>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -222,13 +227,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         overwrite: *overwrite,
                     };
                     let tx = machine
-                        .put(
-                            &provider,
-                            &mut signer,
-                            params,
-                            broadcast_mode,
-                            gas_params,
-                        )
+                        .put(&provider, &mut signer, params, broadcast_mode, gas_params)
                         .await?;
 
                     print_json(&tx)
@@ -259,7 +258,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             }
         }
         ObjectstoreCommands::Get(args) => {
-            // TODO: Handle range requests
             let machine = ObjectStore::attach(args.address);
 
             let key = args.key.as_str();
@@ -276,8 +274,17 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             if let Some(object) = object {
                 match object {
                     Object::Internal(buf) => {
-                        let mut stdout = io::stdout();
-                        stdout.write_all(&buf.0).await?;
+                        if let Some(range) = args.range.as_deref() {
+                            let (start, end) =
+                                parse_range_arg(range.to_string(), buf.0.len() as u64)?;
+                            let mut stdout = io::stdout();
+                            stdout
+                                .write_all(&buf.0[start as usize..=end as usize])
+                                .await?;
+                        } else {
+                            let mut stdout = io::stdout();
+                            stdout.write_all(&buf.0).await?;
+                        }
                         Ok(())
                     }
                     Object::External((buf, resolved)) => {
@@ -299,7 +306,12 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         // If we decide to remove these APIs we can move to Object API
                         // for downloading the file with CID.
                         machine
-                            .download(object_client, key.to_string(), io::stdout())
+                            .download(
+                                object_client,
+                                key.to_string(),
+                                args.range.clone(),
+                                io::stdout(),
+                            )
                             .await?;
 
                         progress_bar.show_downloaded(cid);
