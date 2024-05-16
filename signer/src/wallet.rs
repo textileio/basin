@@ -185,7 +185,7 @@ mod tests {
                 "height": "580876",
                 "codespace": ""
               }"#;
-            let parsed: AbciQuery = serde_json::from_str(&response).unwrap();
+            let parsed: AbciQuery = serde_json::from_str(response).unwrap();
             Ok(parsed)
         }
     }

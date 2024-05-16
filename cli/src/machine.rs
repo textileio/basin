@@ -9,7 +9,7 @@ use serde_json::json;
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
-    util::{get_delegated_address, parse_address},
+    util::{get_delegated_address, parse_address, parse_query_height},
 };
 use adm_sdk::machine::DefaultMachine;
 
@@ -41,17 +41,18 @@ enum MachineCommands {
 #[derive(Clone, Debug, Args)]
 struct GetMachineArgs {
     /// Machine address.
-    #[arg(short, long, value_parser = parse_address)]
+    #[arg(value_parser = parse_address)]
     address: Address,
+    /// Query block height.
+    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
 }
 
 pub async fn handle_machine(cli: Cli, args: &MachineArgs) -> anyhow::Result<()> {
     match &args.command {
         MachineCommands::Get(args) => {
             let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
-            let metadata =
-                DefaultMachine::metadata(&provider, args.address, FvmQueryHeight::Committed)
-                    .await?;
+            let metadata = DefaultMachine::metadata(&provider, args.address, args.height).await?;
 
             let owner = get_delegated_address(metadata.owner)?.encode_hex_with_prefix();
             print_json(&json!({"kind": metadata.kind, "owner": owner}))

@@ -38,11 +38,11 @@ enum AccumulatorCommands {
     /// Get leaf at a given index and height.
     Leaf(AccumulatorLeafArgs),
     /// Get leaf count at a given height.
-    Count(AccumulatorAddressArgs),
+    Count(AccumulatorQueryArgs),
     /// Get peaks at a given height.
-    Peaks(AccumulatorAddressArgs),
+    Peaks(AccumulatorQueryArgs),
     /// Get root at a given height.
-    Root(AccumulatorAddressArgs),
+    Root(AccumulatorQueryArgs),
 }
 
 #[derive(Clone, Debug, Args)]
@@ -76,21 +76,25 @@ struct AccumulatorPushArgs {
 }
 
 #[derive(Clone, Debug, Args)]
-struct AccumulatorAddressArgs {
+struct AccumulatorQueryArgs {
     /// Accumulator machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
-    /// Query height.
-    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
+    /// Query block height.
+    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
 #[derive(Clone, Debug, Args)]
 struct AccumulatorLeafArgs {
+    /// Accumulator machine address.
+    #[arg(short, long, value_parser = parse_address)]
+    address: Address,
     /// Leaf index.
     index: u64,
-    #[command(flatten)]
-    address: AccumulatorAddressArgs,
+    /// Query block height.
+    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
 }
 
 pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Result<()> {
@@ -111,7 +115,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
             signer.set_sequence(sequence, &provider).await?;
 
-            let write_access = if public_write.clone() {
+            let write_access = if *public_write {
                 WriteAccess::Public
             } else {
                 WriteAccess::OnlyOwner
@@ -136,7 +140,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
             signer.set_sequence(sequence, &provider).await?;
 
-            let machine = Accumulator::attach(address.clone());
+            let machine = Accumulator::attach(*address);
 
             let mut reader = input.into_async_reader().await?;
             let mut buf = Vec::new();
@@ -151,10 +155,8 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             print_json(&tx)
         }
         AccumulatorCommands::Leaf(args) => {
-            let machine = Accumulator::attach(args.address.address);
-            let leaf = machine
-                .leaf(&provider, args.index, args.address.height)
-                .await?;
+            let machine = Accumulator::attach(args.address);
+            let leaf = machine.leaf(&provider, args.index, args.height).await?;
 
             let mut stdout = io::stdout();
             stdout.write_all(&leaf).await?;
