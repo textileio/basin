@@ -28,6 +28,7 @@ pub trait ObjectService {
         &self,
         address: String,
         key: String,
+        range: Option<String>,
         writer: impl AsyncWrite + Unpin + Send + 'static,
     ) -> anyhow::Result<()>;
 }
@@ -81,10 +82,19 @@ impl ObjectService for ObjectClient {
         &self,
         address: String,
         key: String,
+        range: Option<String>,
         mut writer: impl AsyncWrite + Unpin + Send + 'static,
     ) -> anyhow::Result<()> {
         let url = format!("{}v1/objectstores/{}/{}", self.endpoint, address, key);
-        let response = self.inner.get(url).send().await?;
+        let response = if let Some(range) = range {
+            self.inner
+                .get(url)
+                .header("Range", format!("bytes={}", range))
+                .send()
+                .await?
+        } else {
+            self.inner.get(url).send().await?
+        };
         if !response.status().is_success() {
             return Err(anyhow!(format!(
                 "failed to download object: {}",
