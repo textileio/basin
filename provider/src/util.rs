@@ -2,6 +2,7 @@
 // Copyright 2022-2024 Protocol Labs
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use fendermint_vm_message::query::FvmQueryHeight;
 use std::str::FromStr;
 
 use fvm_shared::{
@@ -45,4 +46,14 @@ pub fn parse_token_amount(s: &str) -> anyhow::Result<TokenAmount> {
 /// Parse token amount in attoFIL (10**18) from string.
 pub fn parse_token_amount_from_atto(s: &str) -> anyhow::Result<TokenAmount> {
     Ok(TokenAmount::from_atto(BigInt::from_str(s)?))
+}
+
+/// Parse query height from string.
+pub fn parse_query_height(s: &str) -> anyhow::Result<FvmQueryHeight> {
+    let height = match s.to_lowercase().as_str() {
+        "committed" => FvmQueryHeight::Committed,
+        "pending" => FvmQueryHeight::Pending,
+        _ => FvmQueryHeight::Height(s.parse::<u64>()?),
+    };
+    Ok(height)
 }

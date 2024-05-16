@@ -9,9 +9,12 @@ use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
 use serde_json::json;
-use tokio::io::AsyncReadExt;
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 
-use adm_provider::{json_rpc::JsonRpcProvider, util::parse_address};
+use adm_provider::{
+    json_rpc::JsonRpcProvider,
+    util::{parse_address, parse_query_height},
+};
 use adm_sdk::{
     machine::{accumulator::Accumulator, Machine},
     TxParams,
@@ -30,10 +33,16 @@ pub struct AccumulatorArgs {
 enum AccumulatorCommands {
     /// Create a new accumulator.
     Create(AccumulatorCreateArgs),
-    /// Push a new value to the accumulator.
+    /// Push a value.
     Push(AccumulatorPushArgs),
-    /// Get the current root of the accumulator.
-    Root(AccumulatorRootArgs),
+    /// Get leaf at a given index and height.
+    Leaf(AccumulatorLeafArgs),
+    /// Get leaf count at a given height.
+    Count(AccumulatorAddressArgs),
+    /// Get peaks at a given height.
+    Peaks(AccumulatorAddressArgs),
+    /// Get root at a given height.
+    Root(AccumulatorAddressArgs),
 }
 
 #[derive(Clone, Debug, Args)]
@@ -67,10 +76,21 @@ struct AccumulatorPushArgs {
 }
 
 #[derive(Clone, Debug, Args)]
-struct AccumulatorRootArgs {
+struct AccumulatorAddressArgs {
     /// Accumulator machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
+    /// Query height.
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
+}
+
+#[derive(Clone, Debug, Args)]
+struct AccumulatorLeafArgs {
+    /// Leaf index.
+    index: u64,
+    #[command(flatten)]
+    address: AccumulatorAddressArgs,
 }
 
 pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Result<()> {
@@ -130,9 +150,31 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
 
             print_json(&tx)
         }
+        AccumulatorCommands::Leaf(args) => {
+            let machine = Accumulator::attach(args.address.address);
+            let leaf = machine
+                .leaf(&provider, args.index, args.address.height)
+                .await?;
+
+            let mut stdout = io::stdout();
+            stdout.write_all(&leaf).await?;
+            Ok(())
+        }
+        AccumulatorCommands::Count(args) => {
+            let machine = Accumulator::attach(args.address);
+            let count = machine.count(&provider, args.height).await?;
+
+            print_json(&json!({"count": count}))
+        }
+        AccumulatorCommands::Peaks(args) => {
+            let machine = Accumulator::attach(args.address);
+            let peaks = machine.peaks(&provider, args.height).await?;
+
+            print_json(&json!({"peaks": peaks}))
+        }
         AccumulatorCommands::Root(args) => {
             let machine = Accumulator::attach(args.address);
-            let root = machine.root(&provider, FvmQueryHeight::Committed).await?;
+            let root = machine.root(&provider, args.height).await?;
 
             print_json(&json!({"root": root.to_string()}))
         }
