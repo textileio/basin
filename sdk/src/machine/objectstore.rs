@@ -29,7 +29,7 @@ use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use unixfs_v1::file::adder::{Chunker, FileAdder};
 
 use adm_provider::{
-    message::{local_message, object_upload_message},
+    message::{local_message, object_upload_message, GasParams},
     object::ObjectService,
     response::{decode_bytes, decode_cid, Cid},
     BroadcastMode, Provider, QueryProvider, Tx,
@@ -37,7 +37,7 @@ use adm_provider::{
 use adm_signer::Signer;
 
 use crate::machine::{deploy_machine, DeployTx, Machine};
-use crate::TxArgs;
+use crate::TxParams;
 
 pub struct ObjectStore {
     address: Address,
@@ -49,13 +49,19 @@ impl Machine for ObjectStore {
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
-        args: TxArgs,
+        gas_params: GasParams,
     ) -> anyhow::Result<(Self, DeployTx)>
     where
         C: Client + Send + Sync,
     {
-        let (address, tx) =
-            deploy_machine(provider, signer, Kind::ObjectStore, write_access, args).await?;
+        let (address, tx) = deploy_machine(
+            provider,
+            signer,
+            Kind::ObjectStore,
+            write_access,
+            gas_params,
+        )
+        .await?;
         Ok((Self::attach(address), tx))
     }
 
@@ -75,7 +81,7 @@ impl ObjectStore {
         signer: &mut impl Signer,
         params: PutParams,
         broadcast_mode: BroadcastMode,
-        args: TxArgs,
+        gas_params: GasParams,
     ) -> anyhow::Result<Tx<Cid>>
     where
         C: Client + Send + Sync,
@@ -94,7 +100,7 @@ impl ObjectStore {
                 PutObject as u64,
                 params,
                 object,
-                args.gas_params,
+                gas_params,
             )
             .await?;
         provider.perform(message, broadcast_mode, decode_cid).await
@@ -146,7 +152,7 @@ impl ObjectStore {
         signer: &mut impl Signer,
         params: DeleteParams,
         broadcast_mode: BroadcastMode,
-        args: TxArgs,
+        args: TxParams,
     ) -> anyhow::Result<Tx<Cid>>
     where
         C: Client + Send + Sync,

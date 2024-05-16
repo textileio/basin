@@ -137,9 +137,73 @@ impl Wallet {
         }
     }
 
-    /// Set the sequence to an arbitrary value.
-    pub async fn set_sequence(&mut self, sequence: u64) {
-        let mut sequence_guard = self.sequence.lock().await;
-        *sequence_guard = sequence;
+    /// Set the sequence to the given value or initialize it
+    /// from the on-chain state.
+    pub async fn set_sequence(
+        &mut self,
+        maybe_sequence: Option<u64>,
+        provider: &impl QueryProvider,
+    ) -> anyhow::Result<()> {
+        if let Some(sequence) = maybe_sequence {
+            let mut sequence_guard = self.sequence.lock().await;
+            *sequence_guard = sequence;
+        } else {
+            self.init_sequence(provider).await?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+    use async_trait::async_trait;
+    use fendermint_vm_message::query::{FvmQuery, FvmQueryHeight};
+    use tendermint_rpc::endpoint::abci_query::AbciQuery;
+
+    struct MockQueryProvider;
+
+    #[async_trait]
+    impl QueryProvider for MockQueryProvider {
+        async fn query(
+            &self,
+            _query: FvmQuery,
+            _height: FvmQueryHeight,
+        ) -> anyhow::Result<AbciQuery> {
+            // mocked query response with sequence == 65
+            let response = r#"{
+                "code": 0,
+                "log": "",
+                "info": "",
+                "index": "0",
+                "key": "GIM=",
+                "value": "pWRjb2Rl2CpYJwABVaDkAiBuyxJuuG2pHLjnd5bBzV8iF37KrDAjVytY6h9tvJ3WT2VzdGF0ZdgqWCcAAXGg5AIgRbDPwiDO7Ft8HGLE1Bk9OOTrpI6IFXKc51+cCrDkwcBoc2VxdWVuY2UYQWdiYWxhbmNlSQB84tz/LZSh2HFkZWxlZ2F0ZWRfYWRkcmVzc1YECsBf5rY/+ks8UY5v8eWXNY7oOdsB",
+                "proof": null,
+                "height": "580876",
+                "codespace": ""
+              }"#;
+            let parsed: AbciQuery = serde_json::from_str(&response).unwrap();
+            Ok(parsed)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_set_sequence() {
+        let mock_provider = MockQueryProvider;
+        let mut rng = rand::thread_rng();
+        let private_key = SecretKey::random(&mut rng);
+        let subnet_id = SubnetID::from_str("r/foobar").unwrap();
+        let mut wallet =
+            Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id).unwrap();
+
+        // Test setting a specific sequence value
+        wallet.set_sequence(Some(50), &mock_provider).await.unwrap();
+        assert_eq!(*wallet.sequence.lock().await, 50);
+
+        // Test initializing sequence from provider
+        wallet.set_sequence(None, &mock_provider).await.unwrap();
+        assert_eq!(*wallet.sequence.lock().await, 65);
     }
 }

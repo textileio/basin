@@ -23,13 +23,16 @@ use tokio::{
 };
 
 use adm_provider::{json_rpc::JsonRpcProvider, object::ObjectClient, util::parse_address};
-use adm_sdk::machine::{
-    objectstore::{self, ObjectStore},
-    Machine,
+use adm_sdk::{
+    machine::{
+        objectstore::{self, ObjectStore},
+        Machine,
+    },
+    TxParams,
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
-use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, GasArgs};
+use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, TxArgs};
 
 const MAX_INTERNAL_OBJECT_LENGTH: u64 = 1024;
 
@@ -60,7 +63,7 @@ struct ObjectstoreCreateArgs {
     #[arg(long, default_value_t = false)]
     public_write: bool,
     #[command(flatten)]
-    gas_args: GasArgs,
+    tx_args: TxArgs,
 }
 
 #[derive(Clone, Debug, Parser)]
@@ -87,7 +90,7 @@ struct ObjectstorePutArgs {
     #[arg(short, long, value_enum, env, default_value_t = BroadcastMode::Commit)]
     broadcast_mode: BroadcastMode,
     #[command(flatten)]
-    gas_args: GasArgs,
+    tx_args: TxArgs,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -130,11 +133,15 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
         ObjectstoreCommands::Create(ObjectstoreCreateArgs {
             private_key,
             public_write,
-            gas_args,
+            tx_args,
         }) => {
+            let TxParams {
+                sequence,
+                gas_params,
+            } = tx_args.to_tx_params();
             let mut signer =
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
-            signer.init_sequence(&provider).await?;
+            signer.set_sequence(sequence, &provider).await?;
 
             let write_access = if public_write.clone() {
                 WriteAccess::Public
@@ -142,7 +149,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 WriteAccess::OnlyOwner
             };
             let (store, tx) =
-                ObjectStore::new(&provider, &mut signer, write_access, gas_args.new_tx_args()).await?;
+                ObjectStore::new(&provider, &mut signer, write_access, gas_params).await?;
 
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
@@ -154,15 +161,19 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             overwrite,
             input,
             broadcast_mode,
-            gas_args,
+            tx_args,
         }) => {
+            let TxParams {
+                sequence,
+                gas_params,
+            } = tx_args.to_tx_params();
             let broadcast_mode = broadcast_mode.get();
             let mut signer = Wallet::new_secp256k1(
                 private_key.clone(),
                 AccountKind::Ethereum,
                 subnet_id.clone(),
             )?;
-            signer.init_sequence(&provider).await?;
+            signer.set_sequence(sequence, &provider).await?;
 
             let machine = ObjectStore::attach(*address);
             let object_api_url = object_api_url
@@ -216,7 +227,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                             &mut signer,
                             params,
                             broadcast_mode,
-                            gas_args.new_tx_args(),
+                            gas_params,
                         )
                         .await?;
 
@@ -236,7 +247,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                                     overwrite: *overwrite,
                                 },
                                 broadcast_mode,
-                                gas_args.new_tx_args(),
+                                gas_params,
                             )
                             .await?;
                         upload_progress.finish();

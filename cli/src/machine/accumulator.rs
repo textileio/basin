@@ -12,10 +12,13 @@ use serde_json::json;
 use tokio::io::AsyncReadExt;
 
 use adm_provider::{json_rpc::JsonRpcProvider, util::parse_address};
-use adm_sdk::machine::{accumulator::Accumulator, Machine};
+use adm_sdk::{
+    machine::{accumulator::Accumulator, Machine},
+    TxParams,
+};
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
-use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, GasArgs};
+use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, TxArgs};
 
 #[derive(Clone, Debug, Args)]
 pub struct AccumulatorArgs {
@@ -42,7 +45,7 @@ struct AccumulatorCreateArgs {
     #[arg(long, default_value_t = false)]
     public_write: bool,
     #[command(flatten)]
-    gas_args: GasArgs,
+    tx_args: TxArgs,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -60,7 +63,7 @@ struct AccumulatorPushArgs {
     #[arg(short, long, value_enum, env, default_value_t = BroadcastMode::Commit)]
     broadcast_mode: BroadcastMode,
     #[command(flatten)]
-    gas_args: GasArgs,
+    tx_args: TxArgs,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -78,11 +81,15 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
         AccumulatorCommands::Create(AccumulatorCreateArgs {
             private_key,
             public_write,
-            gas_args,
+            tx_args,
         }) => {
+            let TxParams {
+                sequence,
+                gas_params,
+            } = tx_args.to_tx_params();
             let mut signer =
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
-            signer.init_sequence(&provider).await?;
+            signer.set_sequence(sequence, &provider).await?;
 
             let write_access = if public_write.clone() {
                 WriteAccess::Public
@@ -90,8 +97,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
                 WriteAccess::OnlyOwner
             };
             let (store, tx) =
-                Accumulator::new(&provider, &mut signer, write_access, gas_args.new_tx_args())
-                    .await?;
+                Accumulator::new(&provider, &mut signer, write_access, gas_params).await?;
 
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
@@ -100,11 +106,15 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
             address,
             input,
             broadcast_mode,
-            gas_args,
+            tx_args,
         }) => {
+            let TxParams {
+                gas_params,
+                sequence,
+            } = tx_args.to_tx_params();
             let mut signer =
                 Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
-            signer.init_sequence(&provider).await?;
+            signer.set_sequence(sequence, &provider).await?;
 
             let machine = Accumulator::attach(address.clone());
 
@@ -115,13 +125,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
 
             let broadcast_mode = broadcast_mode.get();
             let tx = machine
-                .push(
-                    &provider,
-                    &mut signer,
-                    payload,
-                    broadcast_mode,
-                    gas_args.new_tx_args(),
-                )
+                .push(&provider, &mut signer, payload, broadcast_mode, gas_params)
                 .await?;
 
             print_json(&tx)
