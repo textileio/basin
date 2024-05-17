@@ -282,8 +282,14 @@ impl ObjectStore {
                     // since we have decided to keep the GET APIs intact for a while.
                     // If we decide to remove these APIs, we can move to Object API
                     // for downloading the file with CID.
-                    self.download(object_client, key.to_string(), range.clone(), writer)
-                        .await?;
+                    self.download(
+                        object_client,
+                        key.to_string(),
+                        range.clone(),
+                        height,
+                        writer,
+                    )
+                    .await?;
                     with_progress_bar(progress_bar.as_ref(), |p| {
                         p.show_downloaded(cid);
                         p.finish();
@@ -304,10 +310,11 @@ impl ObjectStore {
         object_client: impl ObjectService,
         key: String,
         range: Option<String>,
+        height: FvmQueryHeight,
         writer: impl AsyncWrite + Unpin + Send + 'static,
     ) -> anyhow::Result<()> {
         object_client
-            .download(self.address.to_string(), key, range, writer)
+            .download(self.address.to_string(), key, range, height.into(), writer)
             .await?;
         Ok(())
     }

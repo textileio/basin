@@ -34,6 +34,7 @@ pub trait ObjectService {
         address: String,
         key: String,
         range: Option<String>,
+        height: u64,
         writer: impl AsyncWrite + Unpin + Send + 'static,
     ) -> anyhow::Result<()>;
 }
@@ -89,9 +90,13 @@ impl ObjectService for ObjectClient {
         address: String,
         key: String,
         range: Option<String>,
+        height: u64,
         mut writer: impl AsyncWrite + Unpin + Send + 'static,
     ) -> anyhow::Result<()> {
-        let url = format!("{}v1/objectstores/{}/{}", self.endpoint, address, key);
+        let url = format!(
+            "{}v1/objectstores/{}/{}?height={}",
+            self.endpoint, address, key, height
+        );
         let response = if let Some(range) = range {
             self.inner
                 .get(url)
