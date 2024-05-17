@@ -16,7 +16,7 @@ use fendermint_actor_objectstore::{
 };
 use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::{query::FvmQueryHeight, signed::Object as MessageObject};
-use fvm_ipld_encoding::RawBytes;
+use fvm_ipld_encoding::{serde_bytes::ByteBuf, RawBytes};
 use fvm_shared::{address::Address, chainid::ChainID};
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
@@ -36,7 +36,12 @@ use adm_provider::{
 };
 use adm_signer::Signer;
 
-use crate::machine::{deploy_machine, DeployTx, Machine};
+use crate::{
+    machine::{deploy_machine, objectstore, DeployTx, Machine},
+    ObjectProgressBar,
+};
+
+const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
 
 /// A machine for S3-like object storage.
 pub struct ObjectStore {
@@ -80,36 +85,98 @@ impl ObjectStore {
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
-        params: PutParams,
+        object_client: impl ObjectService,
+        chain_id: ChainID,
+        mut reader: impl AsyncRead + Unpin + 'static,
+        key: &String,
+        overwrite: bool,
         broadcast_mode: BroadcastMode,
         gas_params: GasParams,
+        progress_bar: Option<crate::ObjectProgressBar>,
     ) -> anyhow::Result<TxReceipt<Cid>>
     where
         C: Client + Send + Sync,
     {
-        let object = match &params.kind {
-            ObjectKind::Internal(_) => None,
-            ObjectKind::External(cid) => {
-                Some(MessageObject::new(params.key.clone(), *cid, self.address))
-            }
-        };
-        let params = RawBytes::serialize(params)?;
-        let message = signer
-            .transaction(
+        let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
+        let first_chunk_size = reader.read(&mut first_chunk).await?;
+        
+        let message = if first_chunk_size > MAX_INTERNAL_OBJECT_LENGTH {
+            let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
+            // Preprocess Object before uploading
+            with_progress_bar(progress_bar.as_ref(), |p| p.show_processing());
+            let (object_cid, bytes_read) =
+                objectstore::process_object(reader, tx, first_chunk).await?;
+            // Upload Object to Object API
+            with_progress_bar(progress_bar.as_ref(), |p| p.show_uploading());
+            let response_cid = self
+                .upload(
+                    signer,
+                    object_client,
+                    key.clone(),
+                    object_cid,
+                    first_chunk_size + bytes_read,
+                    overwrite,
+                    chain_id,
+                    rx,
+                )
+                .await?;
+            // Verify uploaded CID with locally computed CID
+            assert_eq!(response_cid, object_cid);
+            with_progress_bar(progress_bar.as_ref(), |p| {
+                p.show_uploaded(response_cid);
+                p.show_cid_verified();
+                p.finish();
+            });
+            // Broadcast transaction with Object's CID
+            let params = PutParams {
+                key: key.as_bytes().to_vec(),
+                kind: ObjectKind::External(object_cid),
+                overwrite,
+            };
+            let serialized_params = RawBytes::serialize(params.clone())?;
+            let object = Some(MessageObject::new(
+                params.key.clone(),
+                object_cid,
                 self.address,
-                Default::default(),
-                PutObject as u64,
-                params,
-                object,
-                gas_params,
-            )
-            .await?;
+            ));
+            signer
+                .transaction(
+                    self.address,
+                    Default::default(),
+                    PutObject as u64,
+                    serialized_params,
+                    object,
+                    gas_params,
+                )
+                .await?
+        } else {
+            // Handle as an internal object
+            first_chunk.truncate(first_chunk_size);
+            let params = PutParams {
+                key: key.as_bytes().to_vec(),
+                kind: ObjectKind::Internal(ByteBuf(first_chunk)),
+                overwrite,
+            };
+            let serialized_params = RawBytes::serialize(params)?;
+            let message = signer
+                .transaction(
+                    self.address,
+                    Default::default(),
+                    PutObject as u64,
+                    serialized_params,
+                    None,
+                    gas_params,
+                )
+                .await?;
+            with_progress_bar(progress_bar.as_ref(), |p| p.finish());
+            message
+        };
+
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
-    // TODO: This shouldn't be public.
     #[allow(clippy::too_many_arguments)]
-    pub async fn upload(
+    async fn upload(
         &self,
         signer: &mut impl Signer,
         object_client: impl ObjectService,
@@ -229,6 +296,15 @@ fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<Option<ObjectList>> {
     let data = decode_bytes(deliver_tx)?;
     fvm_ipld_encoding::from_slice::<Option<ObjectList>>(&data)
         .map_err(|e| anyhow!("error parsing as Option<ObjectList>: {e}"))
+}
+
+fn with_progress_bar<F>(progrss_bar: Option<&ObjectProgressBar>, f: F)
+where
+    F: FnOnce(&ObjectProgressBar),
+{
+    if let Some(progress_bar) = progrss_bar {
+        f(progress_bar);
+    }
 }
 
 #[derive(Clone)]

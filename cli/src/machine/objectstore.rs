@@ -5,22 +5,14 @@ use anyhow::anyhow;
 use cid::Cid;
 use clap::{Args, Parser, Subcommand};
 use clap_stdin::FileOrStdin;
-use console::Emoji;
 use fendermint_actor_machine::WriteAccess;
-use fendermint_actor_objectstore::{
-    DeleteParams, GetParams, ListParams, Object, ObjectKind, ObjectListItem, PutParams,
-};
+use fendermint_actor_objectstore::{DeleteParams, GetParams, ListParams, Object, ObjectListItem};
 use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
-use fvm_ipld_encoding::serde_bytes::ByteBuf;
 use fvm_shared::address::Address;
-use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::{json, Value};
 use tendermint_rpc::Url;
-use tokio::{
-    io::{self, AsyncReadExt, AsyncWriteExt},
-    sync::mpsc,
-};
+use tokio::io::{self, AsyncWriteExt};
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
@@ -28,17 +20,12 @@ use adm_provider::{
     util::{parse_address, parse_query_height},
 };
 use adm_sdk::{
-    machine::{
-        objectstore::{self, ObjectStore},
-        Machine,
-    },
-    TxParams,
+    machine::{objectstore::ObjectStore, Machine},
+    ObjectProgressBar, TxParams,
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
 use crate::{get_rpc_url, get_subnet_id, parse_range_arg, print_json, BroadcastMode, Cli, TxArgs};
-
-const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
 
 #[derive(Clone, Debug, Args)]
 pub struct ObjectstoreArgs {
@@ -236,76 +223,23 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .clone()
                 .unwrap_or(cli.network.get().object_api_url()?);
             let object_client = ObjectClient::new(object_api_url);
-
-            let mut reader = input.into_async_reader().await?;
-            let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
-
             let upload_progress = ObjectProgressBar::new(cli.quiet);
 
-            match reader.read(&mut first_chunk).await {
-                Ok(first_chunk_size) => {
-                    if first_chunk_size > MAX_INTERNAL_OBJECT_LENGTH {
-                        let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
-                        // Preprocess Object before uploading
-                        upload_progress.show_processing();
-                        let (object_cid, bytes_read) =
-                            objectstore::process_object(reader, tx, first_chunk).await?;
-
-                        // Upload Object with signature
-                        upload_progress.show_uploading();
-                        let response_cid = machine
-                            .upload(
-                                &mut signer,
-                                object_client,
-                                key.clone(),
-                                object_cid,
-                                first_chunk_size + bytes_read,
-                                *overwrite,
-                                subnet_id.chain_id(),
-                                rx,
-                            )
-                            .await?;
-                        upload_progress.show_uploaded(response_cid);
-
-                        // Verify uploaded CID with locally computed CID
-                        assert_eq!(response_cid, object_cid);
-                        upload_progress.show_cid_verified();
-                        upload_progress.finish();
-
-                        // Broadcast transaction with Object's CID
-                        let params = PutParams {
-                            key: key.as_bytes().to_vec(),
-                            kind: ObjectKind::External(object_cid),
-                            overwrite: *overwrite,
-                        };
-                        let tx = machine
-                            .put(&provider, &mut signer, params, broadcast_mode, gas_params)
-                            .await?;
-
-                        print_json(&tx)
-                    } else {
-                        // Handle as an internal object
-                        first_chunk.truncate(first_chunk_size);
-                        let tx = machine
-                            .put(
-                                &provider,
-                                &mut signer,
-                                PutParams {
-                                    key: key.as_bytes().to_vec(),
-                                    kind: ObjectKind::Internal(ByteBuf(first_chunk)),
-                                    overwrite: *overwrite,
-                                },
-                                broadcast_mode,
-                                gas_params,
-                            )
-                            .await?;
-
-                        upload_progress.finish();
-                        print_json(&tx)
-                    }
-                }
-                Err(e) => Err(e.into()),
-            }
+            let tx = machine
+                .put(
+                    &provider,
+                    &mut signer,
+                    object_client,
+                    subnet_id.chain_id(),
+                    input.into_async_reader().await?,
+                    key,
+                    *overwrite,
+                    broadcast_mode,
+                    gas_params,
+                    Some(upload_progress),
+                )
+                .await?;
+            print_json(&tx)
         }
         ObjectstoreCommands::Delete(ObjectstoreDeleteArgs {
             private_key,
@@ -447,72 +381,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .collect::<Vec<Value>>();
 
             print_json(&json!({"objects": objects, "common_prefixes": common_prefixes}))
-        }
-    }
-}
-
-// === Progress Bar ===
-
-struct ObjectProgressBar {
-    inner: Option<ProgressBar>,
-}
-
-impl ObjectProgressBar {
-    fn new(quiet: bool) -> Self {
-        if quiet {
-            return Self { inner: None };
-        }
-
-        let inner = ProgressBar::new_spinner();
-        let tick_style = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        let template = "{spinner:.green} [{elapsed_precise}] {msg}";
-        inner.set_style(
-            ProgressStyle::with_template(template)
-                .unwrap()
-                .tick_strings(tick_style),
-        );
-        inner.enable_steady_tick(std::time::Duration::from_millis(80));
-
-        Self { inner: Some(inner) }
-    }
-
-    fn show_processing(&self) {
-        if let Some(bar) = &self.inner {
-            bar.println(format!("{}  Processing object...", Emoji("⌛", "")));
-        }
-    }
-
-    fn show_uploading(&self) {
-        if let Some(bar) = &self.inner {
-            bar.println(format!("{}  Uploading object...", Emoji("⌛", "")));
-        }
-    }
-
-    fn show_uploaded(&self, cid: Cid) {
-        if let Some(bar) = &self.inner {
-            bar.println(format!(
-                "{}  Object uploaded (CID: {}).",
-                Emoji("✅", ""),
-                cid
-            ));
-        }
-    }
-
-    fn show_downloaded(&self, cid: Cid) {
-        if let Some(bar) = &self.inner {
-            bar.println(format!("{}  Downloaded object {}", Emoji("✅", ""), cid,));
-        }
-    }
-
-    fn show_cid_verified(&self) {
-        if let Some(bar) = &self.inner {
-            bar.println(format!("{}  Object verified.", Emoji("✅", "")));
-        }
-    }
-
-    fn finish(&self) {
-        if let Some(bar) = &self.inner {
-            bar.finish_and_clear();
         }
     }
 }
