@@ -17,10 +17,12 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 cid = { workspace = true }
+console = { workspace = true }
 num-traits = { workspace = true }
 serde = { workspace = true }
 ethers = { workspace = true }
 ethers-contract = { workspace = true }
+indicatif = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 tendermint = { workspace = true }

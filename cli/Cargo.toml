@@ -20,10 +20,8 @@ bytes = { workspace = true }
 cid = { workspace = true }
 clap = { workspace = true }
 clap-stdin = { workspace = true }
-console = { workspace = true }
 ethers = { workspace = true }
 humantime = { workspace = true }
-indicatif = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
