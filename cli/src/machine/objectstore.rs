@@ -126,7 +126,7 @@ struct ObjectstoreAddressArgs {
     /// "committed" (latest committed block),
     /// "pending" (consider pending state changes),
     /// or a specific block height, e.g., "123".
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
@@ -150,7 +150,7 @@ struct ObjectstoreGetArgs {
     /// "committed" (latest committed block),
     /// "pending" (consider pending state changes),
     /// or a specific block height, e.g., "123".
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
@@ -176,7 +176,7 @@ struct ObjectstoreListArgs {
     /// "committed" (latest committed block),
     /// "pending" (consider pending state changes),
     /// or a specific block height, e.g., "123".
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 

@@ -85,7 +85,7 @@ struct AccumulatorQueryArgs {
     /// "committed" (latest committed block),
     /// "pending" (consider pending state changes),
     /// or a specific block height, e.g., "123".
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
@@ -101,7 +101,7 @@ struct AccumulatorLeafArgs {
     /// "committed" (latest committed block),
     /// "pending" (consider pending state changes),
     /// or a specific block height, e.g., "123".
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
