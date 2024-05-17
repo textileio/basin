@@ -24,7 +24,7 @@ use crate::machine::{deploy_machine, DeployTx, Machine};
 
 const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 
-/// Display-friendly version of [`fendermint_actor_accumulator::PushReturn`].
+/// JSON serialization friendly version of [`fendermint_actor_accumulator::PushReturn`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PushReturn {
     pub root: Cid,

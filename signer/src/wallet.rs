@@ -107,7 +107,7 @@ impl Signer for Wallet {
 }
 
 impl Wallet {
-    /// Returns a new secp256k1 [`Wallet`].
+    /// Returns a new secp256k1 [`Wallet`] using the given [`SecretKey`].
     ///
     /// Note, subnets only support [`AccountKind::Ethereum`].
     pub fn new_secp256k1(
@@ -204,8 +204,7 @@ mod tests {
     #[tokio::test]
     async fn test_set_sequence() {
         let mock_provider = MockQueryProvider;
-        let mut rng = rand::thread_rng();
-        let private_key = SecretKey::random(&mut rng);
+        let private_key = crate::key::random_secretkey();
         let subnet_id = SubnetID::from_str("r/foobar").unwrap();
         let mut wallet =
             Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id).unwrap();

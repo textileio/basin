@@ -1,12 +1,17 @@
+// Copyright 2024 ADM Contributors
+// SPDX-License-Identifier: Apache-2.0, MIT
+
 use cid::Cid;
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 
+/// A simple progress bar for object uploads and downloads.
 pub struct ObjectProgressBar {
     inner: Option<ProgressBar>,
 }
 
 impl ObjectProgressBar {
+    /// Create new progress bar. Use `quiet` to silence output.
     pub fn new(quiet: bool) -> Self {
         if quiet {
             return Self { inner: None };
@@ -25,18 +30,21 @@ impl ObjectProgressBar {
         Self { inner: Some(inner) }
     }
 
+    /// Show "processing object" text.
     pub fn show_processing(&self) {
         if let Some(bar) = &self.inner {
             bar.println(format!("{}  Processing object...", Emoji("⌛", "")));
         }
     }
 
+    /// Show "uploading object" text.
     pub fn show_uploading(&self) {
         if let Some(bar) = &self.inner {
             bar.println(format!("{}  Uploading object...", Emoji("⌛", "")));
         }
     }
 
+    /// Show uploaded object [`Cid`].
     pub fn show_uploaded(&self, cid: Cid) {
         if let Some(bar) = &self.inner {
             bar.println(format!(
@@ -47,18 +55,21 @@ impl ObjectProgressBar {
         }
     }
 
+    /// Show downloaded object [`Cid`].
     pub fn show_downloaded(&self, cid: Cid) {
         if let Some(bar) = &self.inner {
             bar.println(format!("{}  Downloaded object {}", Emoji("✅", ""), cid,));
         }
     }
 
+    /// Show "object verified" text.
     pub fn show_cid_verified(&self) {
         if let Some(bar) = &self.inner {
             bar.println(format!("{}  Object verified.", Emoji("✅", "")));
         }
     }
 
+    /// Finish and clear the progress bar.
     pub fn finish(&self) {
         if let Some(bar) = &self.inner {
             bar.finish_and_clear();

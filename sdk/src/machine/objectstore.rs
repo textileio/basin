@@ -10,14 +10,15 @@ use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_actor_objectstore::{
-    DeleteParams, GetParams, ListParams,
+    DeleteParams, GetParams,
     Method::{DeleteObject, GetObject, ListObjects, PutObject},
     Object, ObjectKind, ObjectList, PutParams,
 };
 use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::{query::FvmQueryHeight, signed::Object as MessageObject};
 use fvm_ipld_encoding::{serde_bytes::ByteBuf, RawBytes};
-use fvm_shared::{address::Address, chainid::ChainID};
+use fvm_shared::address::Address;
+use num_traits::Zero;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 use tokio::{
@@ -37,11 +38,49 @@ use adm_provider::{
 use adm_signer::Signer;
 
 use crate::{
-    machine::{deploy_machine, objectstore, DeployTx, Machine},
+    machine::{deploy_machine, DeployTx, Machine},
     progress_bar::ObjectProgressBar,
 };
 
 const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
+
+/// Params for listing objects.
+#[derive(Default, Debug)]
+pub struct ListParams {
+    /// The prefix to filter objects by.
+    pub prefix: String,
+    /// The delimiter used to define object hierarchy.
+    pub delimiter: String,
+    /// The offset to start listing objects from.
+    pub offset: u64,
+    /// The maximum number of objects to list.
+    pub limit: u64,
+}
+
+/// Parse a range string and return start and end byte positions.
+fn parse_range(range: String, size: u64) -> anyhow::Result<(u64, u64)> {
+    let range: Vec<String> = range.split('-').map(|n| n.to_string()).collect();
+    if range.len() != 2 {
+        return Err(anyhow!("invalid range format"));
+    }
+    let (start, end): (u64, u64) = match (!range[0].is_empty(), !range[1].is_empty()) {
+        (true, true) => (range[0].parse::<u64>()?, range[1].parse::<u64>()?),
+        (true, false) => (range[0].parse::<u64>()?, size - 1),
+        (false, true) => {
+            let last = range[1].parse::<u64>()?;
+            if last > size {
+                (0, size - 1)
+            } else {
+                (size - last, size - 1)
+            }
+        }
+        (false, false) => (0, size - 1),
+    };
+    if start > end || end >= size {
+        return Err(anyhow!("invalid range"));
+    }
+    Ok((start, end))
+}
 
 /// A machine for S3-like object storage.
 pub struct ObjectStore {
@@ -81,14 +120,14 @@ impl Machine for ObjectStore {
 
 impl ObjectStore {
     /// Put an object into the object store.
+    #[allow(clippy::too_many_arguments)]
     pub async fn put<C>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         object_client: impl ObjectService,
-        chain_id: ChainID,
         mut reader: impl AsyncRead + Unpin + 'static,
-        key: &String,
+        key: &str,
         overwrite: bool,
         broadcast_mode: BroadcastMode,
         gas_params: GasParams,
@@ -100,26 +139,29 @@ impl ObjectStore {
         let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
         let first_chunk_size = reader.read(&mut first_chunk).await?;
 
-        let message = if first_chunk_size > MAX_INTERNAL_OBJECT_LENGTH {
+        let message = if first_chunk_size.is_zero() {
+            return Err(anyhow!("cannot put empty object"));
+        } else if first_chunk_size > MAX_INTERNAL_OBJECT_LENGTH {
             let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
+
             // Preprocess Object before uploading
             with_progress_bar(progress_bar.as_ref(), |p| p.show_processing());
-            let (object_cid, bytes_read) =
-                objectstore::process_object(reader, tx, first_chunk).await?;
+            let (object_cid, bytes_read) = process_object(reader, tx, first_chunk).await?;
+
             // Upload Object to Object API
             with_progress_bar(progress_bar.as_ref(), |p| p.show_uploading());
             let response_cid = self
                 .upload(
                     signer,
                     object_client,
-                    key.clone(),
+                    key,
                     object_cid,
                     first_chunk_size + bytes_read,
                     overwrite,
-                    chain_id,
                     rx,
                 )
                 .await?;
+
             // Verify uploaded CID with locally computed CID
             assert_eq!(response_cid, object_cid);
             with_progress_bar(progress_bar.as_ref(), |p| {
@@ -127,9 +169,10 @@ impl ObjectStore {
                 p.show_cid_verified();
                 p.finish();
             });
+
             // Broadcast transaction with Object's CID
             let params = PutParams {
-                key: key.as_bytes().to_vec(),
+                key: key.into(),
                 kind: ObjectKind::External(object_cid),
                 overwrite,
             };
@@ -139,6 +182,7 @@ impl ObjectStore {
                 object_cid,
                 self.address,
             ));
+
             signer
                 .transaction(
                     self.address,
@@ -153,12 +197,13 @@ impl ObjectStore {
             // Handle as an internal object
             first_chunk.truncate(first_chunk_size);
             let params = PutParams {
-                key: key.as_bytes().to_vec(),
+                key: key.into(),
                 kind: ObjectKind::Internal(ByteBuf(first_chunk)),
                 overwrite,
             };
             let serialized_params = RawBytes::serialize(params)?;
             with_progress_bar(progress_bar.as_ref(), |p| p.finish());
+
             signer
                 .transaction(
                     self.address,
@@ -174,31 +219,40 @@ impl ObjectStore {
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
+    /// Uploads an object to the Object API for staging.
     #[allow(clippy::too_many_arguments)]
     async fn upload(
         &self,
         signer: &mut impl Signer,
         object_client: impl ObjectService,
-        key: String,
+        key: &str,
         cid: cid::Cid,
         size: usize,
         overwrite: bool,
-        chain_id: ChainID,
         rx: mpsc::Receiver<Vec<u8>>,
     ) -> anyhow::Result<cid::Cid> {
         let from = signer.address();
-        let key = key.as_bytes().to_vec();
         let params = PutParams {
-            key: key.clone(),
+            key: key.into(),
             kind: ObjectKind::External(cid),
             overwrite,
         };
         let serialized_params = RawBytes::serialize(params)?;
+
         let message =
             object_upload_message(from, self.address, PutObject as u64, serialized_params);
-        let singed_message =
-            signer.sign_message(message, Some(MessageObject::new(key, cid, self.address)))?;
+        let singed_message = signer.sign_message(
+            message,
+            Some(MessageObject::new(key.into(), cid, self.address)),
+        )?;
         let serialized_signed_message = fvm_ipld_encoding::to_vec(&singed_message)?;
+
+        let chain_id = match signer.subnet_id() {
+            Some(id) => id.chain_id(),
+            None => {
+                return Err(anyhow!("failed to get subnet ID from signer"));
+            }
+        };
 
         let object_stream = ReceiverStream::new(rx)
             .map(|bytes_vec| Ok::<Bytes, reqwest::Error>(Bytes::from(bytes_vec)));
@@ -211,6 +265,7 @@ impl ObjectStore {
                 chain_id.into(),
             )
             .await?;
+
         Ok(response.cid)
     }
 
@@ -219,13 +274,14 @@ impl ObjectStore {
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
-        params: DeleteParams,
+        key: &str,
         broadcast_mode: BroadcastMode,
         gas_params: GasParams,
     ) -> anyhow::Result<TxReceipt<Cid>>
     where
         C: Client + Send + Sync,
     {
+        let params = DeleteParams { key: key.into() };
         let params = RawBytes::serialize(params)?;
         let message = signer
             .transaction(
@@ -240,20 +296,19 @@ impl ObjectStore {
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
-    /// Get an object at the given height.
+    /// Get an object at the given key, range, and height.
+    #[allow(clippy::too_many_arguments)]
     pub async fn get(
         &self,
         provider: &impl QueryProvider,
         object_client: impl ObjectService,
         key: &str,
-        range: &Option<String>,
+        range: Option<String>,
         height: FvmQueryHeight,
         mut writer: impl AsyncWrite + Unpin + Send + 'static,
         progress_bar: Option<ObjectProgressBar>,
     ) -> anyhow::Result<()> {
-        let params = GetParams {
-            key: key.as_bytes().to_vec(),
-        };
+        let params = GetParams { key: key.into() };
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, GetObject as u64, params);
         let response = provider.call(message, height, decode_get).await?;
@@ -261,9 +316,8 @@ impl ObjectStore {
         if let Some(object) = response.value {
             match object {
                 Object::Internal(buf) => {
-                    if let Some(range) = range.as_deref() {
-                        let (start, end) =
-                            crate::parse_range_arg(range.to_string(), buf.0.len() as u64)?;
+                    if let Some(range) = range {
+                        let (start, end) = parse_range(range, buf.0.len() as u64)?;
                         writer
                             .write_all(&buf.0[start as usize..=end as usize])
                             .await?;
@@ -281,14 +335,8 @@ impl ObjectStore {
                     // since we have decided to keep the GET APIs intact for a while.
                     // If we decide to remove these APIs, we can move to Object API
                     // for downloading the file with CID.
-                    self.download(
-                        object_client,
-                        key.to_string(),
-                        range.clone(),
-                        height,
-                        writer,
-                    )
-                    .await?;
+                    self.download(object_client, key, range.clone(), height, writer)
+                        .await?;
                     with_progress_bar(progress_bar.as_ref(), |p| {
                         p.show_downloaded(cid);
                         p.finish();
@@ -301,19 +349,17 @@ impl ObjectStore {
         }
     }
 
-    /// Download an object.
-    ///
-    /// TODO: Handle block height query.
+    /// Download an object for the given key, range, and height.
     async fn download(
         &self,
         object_client: impl ObjectService,
-        key: String,
+        key: &str,
         range: Option<String>,
         height: FvmQueryHeight,
         writer: impl AsyncWrite + Unpin + Send + 'static,
     ) -> anyhow::Result<()> {
         object_client
-            .download(self.address.to_string(), key, range, height.into(), writer)
+            .download(self.address, key, range, height.into(), writer)
             .await?;
         Ok(())
     }
@@ -327,6 +373,12 @@ impl ObjectStore {
         params: ListParams,
         height: FvmQueryHeight,
     ) -> anyhow::Result<Option<ObjectList>> {
+        let params = fendermint_actor_objectstore::ListParams {
+            prefix: params.prefix.into(),
+            delimiter: params.delimiter.into(),
+            offset: params.offset,
+            limit: params.limit,
+        };
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, ListObjects as u64, params);
         let response = provider.call(message, height, decode_list).await?;
@@ -449,7 +501,7 @@ impl ObjectProcessor {
 /// Uses a LocalSet to spawn the non-Send future.
 /// This is necessary because the clap's AsyncReader impl
 /// is not Send. LocalSet is used to spawn the non-Send futures.
-pub async fn process_object(
+async fn process_object(
     reader: impl AsyncRead + Unpin + 'static,
     tx: Sender<Vec<u8>>,
     first_chunk: Vec<u8>,

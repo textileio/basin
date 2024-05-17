@@ -14,3 +14,9 @@ pub fn parse_secret_key(hex_str: &str) -> anyhow::Result<SecretKey> {
     let sk = SecretKey::try_from(raw_secret).context("failed to parse secret key")?;
     Ok(sk)
 }
+
+/// Returns a new [`SecretKey`] from a thread-local random number generator, seeded by the system.
+pub fn random_secretkey() -> SecretKey {
+    let mut rng = rand::thread_rng();
+    SecretKey::random(&mut rng)
+}
