@@ -99,7 +99,7 @@ impl ObjectStore {
     {
         let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
         let first_chunk_size = reader.read(&mut first_chunk).await?;
-        
+
         let message = if first_chunk_size > MAX_INTERNAL_OBJECT_LENGTH {
             let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
             // Preprocess Object before uploading
@@ -245,19 +245,61 @@ impl ObjectStore {
     pub async fn get(
         &self,
         provider: &impl QueryProvider,
-        params: GetParams,
+        object_client: impl ObjectService,
+        key: &str,
+        range: &Option<String>,
         height: FvmQueryHeight,
-    ) -> anyhow::Result<Option<Object>> {
+        mut writer: impl AsyncWrite + Unpin + Send + 'static,
+        progress_bar: Option<crate::ObjectProgressBar>,
+    ) -> anyhow::Result<()> {
+        let params = GetParams {
+            key: key.as_bytes().to_vec(),
+        };
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, GetObject as u64, params);
         let response = provider.call(message, height, decode_get).await?;
-        Ok(response.value)
+
+        if let Some(object) = response.value {
+            match object {
+                Object::Internal(buf) => {
+                    if let Some(range) = range.as_deref() {
+                        let (start, end) =
+                            crate::parse_range_arg(range.to_string(), buf.0.len() as u64)?;
+                        writer
+                            .write_all(&buf.0[start as usize..=end as usize])
+                            .await?;
+                    } else {
+                        writer.write_all(&buf.0).await?;
+                    }
+                    Ok(())
+                }
+                Object::External((buf, resolved)) => {
+                    let cid = cid::Cid::try_from(buf.0)?;
+                    if !resolved {
+                        return Err(anyhow!("object is not resolved"));
+                    }
+                    // The `download` method is currently using /objectstore API
+                    // since we have decided to keep the GET APIs intact for a while.
+                    // If we decide to remove these APIs, we can move to Object API
+                    // for downloading the file with CID.
+                    self.download(object_client, key.to_string(), range.clone(), writer)
+                        .await?;
+                    with_progress_bar(progress_bar.as_ref(), |p| {
+                        p.show_downloaded(cid);
+                        p.finish();
+                    });
+                    Ok(())
+                }
+            }
+        } else {
+            Err(anyhow!("object not found for key '{}'", key))
+        }
     }
 
     /// Download an object.
     ///
     /// TODO: Handle block height query.
-    pub async fn download(
+    async fn download(
         &self,
         object_client: impl ObjectService,
         key: String,
