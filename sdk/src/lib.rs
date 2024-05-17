@@ -13,7 +13,6 @@ pub mod network;
 pub struct TxParams {
     /// Sender account sequence (nonce).
     pub sequence: Option<u64>,
-
     /// Gas params.
     pub gas_params: GasParams,
 }

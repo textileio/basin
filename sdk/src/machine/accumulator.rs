@@ -16,7 +16,7 @@ use tendermint_rpc::Client;
 
 use adm_provider::{
     message::local_message, message::GasParams, response::decode_bytes, response::decode_cid,
-    response::Cid, BroadcastMode, Provider, QueryProvider, Tx,
+    response::Cid, BroadcastMode, Provider, QueryProvider, TxReceipt,
 };
 use adm_signer::Signer;
 
@@ -24,7 +24,7 @@ use crate::machine::{deploy_machine, DeployTx, Machine};
 
 const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 
-/// Pretty version of [`fendermint_actor_accumulator::PushReturn`].
+/// Display-friendly version of [`fendermint_actor_accumulator::PushReturn`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PushReturn {
     pub root: Cid,
@@ -40,6 +40,7 @@ impl From<fendermint_actor_accumulator::PushReturn> for PushReturn {
     }
 }
 
+/// A machine for event stream accumulation.
 pub struct Accumulator {
     address: Address,
 }
@@ -84,7 +85,7 @@ impl Accumulator {
         payload: Bytes,
         broadcast_mode: BroadcastMode,
         gas_params: GasParams,
-    ) -> anyhow::Result<Tx<PushReturn>>
+    ) -> anyhow::Result<TxReceipt<PushReturn>>
     where
         C: Client + Send + Sync,
     {

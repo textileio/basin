@@ -4,6 +4,7 @@
 use anyhow::Context;
 use fendermint_crypto::SecretKey;
 
+/// Parse [`SecretKey`] from a hex string.
 pub fn parse_secret_key(hex_str: &str) -> anyhow::Result<SecretKey> {
     let mut hex_str = hex_str.trim();
     if hex_str.starts_with("0x") {

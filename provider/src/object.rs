@@ -10,12 +10,16 @@ use reqwest::Client;
 use tendermint_rpc::Url;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
+/// The result of an upload.
 pub struct UploadResponse {
+    /// The [`Cid`] of the uploaded object.
     pub cid: Cid,
 }
 
+/// Trait implemented by object clients.
 #[async_trait]
 pub trait ObjectService {
+    /// Upload an object to a node's Object API.
     async fn upload(
         &self,
         body: reqwest::Body,
@@ -24,6 +28,7 @@ pub trait ObjectService {
         chain_id: u64,
     ) -> anyhow::Result<UploadResponse>;
 
+    /// Download an object from a node's Object API.
     async fn download(
         &self,
         address: String,
@@ -33,6 +38,7 @@ pub trait ObjectService {
     ) -> anyhow::Result<()>;
 }
 
+/// An object service client capable of uploading and downloading objects.
 pub struct ObjectClient {
     inner: Client,
     endpoint: Url,

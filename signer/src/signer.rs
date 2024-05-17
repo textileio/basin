@@ -13,14 +13,23 @@ use adm_provider::message::GasParams;
 
 use crate::SubnetID;
 
+/// Trait that must be implemented by all signers.
+///
+/// In the future, this could be implemented with WASM imports for browser-based wallets.
 #[async_trait]
 pub trait Signer: Clone + Send + Sync {
+    /// Returns the signer address.
     fn address(&self) -> Address;
 
+    /// Returns the signer [`SecretKey`] if it exists.
     fn secret_key(&self) -> Option<SecretKey>;
 
+    /// Returns the signer [`SubnetID`] if it exists.
+    ///
+    /// This is used to derive a chain ID associated with a message.
     fn subnet_id(&self) -> Option<SubnetID>;
 
+    /// Returns a [`ChainMessage`] that can be submitted to a provider.
     async fn transaction(
         &mut self,
         to: Address,
@@ -31,12 +40,14 @@ pub trait Signer: Clone + Send + Sync {
         gas_params: GasParams,
     ) -> anyhow::Result<ChainMessage>;
 
+    /// Returns a raw [`SignedMessage`].  
     fn sign_message(
         &self,
         message: Message,
         object: Option<Object>,
     ) -> anyhow::Result<SignedMessage>;
 
+    /// Verifies a raw [`SignedMessage`].
     fn verify_message(
         &self,
         message: &Message,

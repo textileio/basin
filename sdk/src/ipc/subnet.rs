@@ -8,6 +8,7 @@ use reqwest::Url;
 
 use adm_signer::SubnetID;
 
+/// The EVM subnet config parameters.
 #[derive(Debug, Clone)]
 pub struct EVMSubnet {
     pub id: SubnetID,

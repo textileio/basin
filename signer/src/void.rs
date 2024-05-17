@@ -15,6 +15,7 @@ use adm_provider::message::GasParams;
 use crate::signer::Signer;
 use crate::SubnetID;
 
+/// [`Signer`] implementation that is not capable of signing messages.
 #[derive(Clone, Debug)]
 pub struct Void {
     address: Address,

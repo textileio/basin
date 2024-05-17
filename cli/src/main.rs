@@ -23,7 +23,6 @@ use crate::machine::{handle_machine, MachineArgs};
 mod account;
 mod machine;
 
-/// Command line args
 #[derive(Clone, Debug, Parser)]
 #[command(name = "adm", author, version, about, long_about = None)]
 struct Cli {
@@ -58,7 +57,7 @@ enum Commands {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum Network {
+enum Network {
     /// Network presets for mainnet.
     Mainnet,
     /// Network presets for Calibration (default pre-mainnet).
@@ -78,21 +77,21 @@ impl Network {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum BroadcastMode {
-    /// Broadcast mode presets for Commit.
-    Commit,
-    /// Broadcast mode presets for Sync.
-    Sync,
-    /// Broadcast mode presets for Async.
+enum BroadcastMode {
+    /// Return immediately after the transaction is broadcasted without waiting for check results.
     Async,
+    /// Wait for the check results before returning from broadcast.
+    Sync,
+    /// Wait for the delivery results before returning from broadcast.
+    Commit,
 }
 
 impl BroadcastMode {
     pub fn get(&self) -> SDKBroadcastMode {
         match self {
-            BroadcastMode::Commit => SDKBroadcastMode::Commit,
-            BroadcastMode::Sync => SDKBroadcastMode::Sync,
             BroadcastMode::Async => SDKBroadcastMode::Async,
+            BroadcastMode::Sync => SDKBroadcastMode::Sync,
+            BroadcastMode::Commit => SDKBroadcastMode::Commit,
         }
     }
 }

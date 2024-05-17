@@ -49,12 +49,16 @@ struct AddressArgs {
     #[arg(short, long, value_parser = parse_address)]
     address: Option<Address>,
     /// Query block height.
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    /// Possible values:
+    /// "committed" (latest committed block),
+    /// "pending" (consider pending state changes),
+    /// or a specific block height, e.g., "123".
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
 #[derive(Clone, Debug, Args)]
-pub struct SubnetArgs {
+struct SubnetArgs {
     /// The Ethereum API rpc http endpoint.
     #[arg(long)]
     evm_rpc_url: Option<Url>,
@@ -84,7 +88,7 @@ struct BalanceArgs {
 }
 
 #[derive(Clone, Debug, Args)]
-pub struct FundArgs {
+struct FundArgs {
     /// Wallet private key (ECDSA, secp256k1) for signing transactions.
     #[arg(short, long, env, value_parser = parse_secret_key)]
     private_key: SecretKey,
@@ -99,7 +103,7 @@ pub struct FundArgs {
 }
 
 #[derive(Clone, Debug, Args)]
-pub struct TransferArgs {
+struct TransferArgs {
     /// Wallet private key (ECDSA, secp256k1) for signing transactions.
     #[arg(short, long, env, value_parser = parse_secret_key)]
     private_key: SecretKey,
@@ -113,6 +117,7 @@ pub struct TransferArgs {
     subnet: SubnetArgs,
 }
 
+/// Account commmands handler.
 pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> {
     let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
     let subnet_id = get_subnet_id(&cli)?;

@@ -8,6 +8,7 @@ use fendermint_vm_message::signed::SignedMessage;
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{address::Address, econ::TokenAmount, message::Message, MethodNum};
 
+/// Gas parameters for transactions.
 #[derive(Clone, Debug)]
 pub struct GasParams {
     /// Maximum amount of gas that can be charged.
@@ -47,6 +48,7 @@ pub fn local_message(to: Address, method_num: MethodNum, params: RawBytes) -> Me
     }
 }
 
+/// Convenience method to create a local unsigned read-only object-carrying message.
 pub fn object_upload_message(
     from: Address,
     to: Address,

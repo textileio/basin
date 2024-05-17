@@ -81,7 +81,11 @@ struct AccumulatorQueryArgs {
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
     /// Query block height.
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    /// Possible values:
+    /// "committed" (latest committed block),
+    /// "pending" (consider pending state changes),
+    /// or a specific block height, e.g., "123".
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
@@ -93,10 +97,15 @@ struct AccumulatorLeafArgs {
     /// Leaf index.
     index: u64,
     /// Query block height.
-    #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
+    /// Possible values:
+    /// "committed" (latest committed block),
+    /// "pending" (consider pending state changes),
+    /// or a specific block height, e.g., "123".
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
+/// Accumulator commmands handler.
 pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Result<()> {
     let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
     let subnet_id = get_subnet_id(&cli)?;

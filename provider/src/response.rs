@@ -45,17 +45,13 @@ pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<Cid> {
         .map_err(|e| anyhow!("error parsing as Cid: {e}"))
 }
 
-/// Wrapper for [`cid::Cid`] that is display friendly.
+/// Display-friendly version of [`cid::Cid`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Cid {
-    inner: cid::Cid,
-}
-
-impl Cid {}
+pub struct Cid(cid::Cid);
 
 impl From<cid::Cid> for Cid {
     fn from(v: cid::Cid) -> Self {
-        Self { inner: v }
+        Self(v)
     }
 }
 
@@ -63,15 +59,13 @@ impl FromStr for Cid {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            inner: cid::Cid::try_from(s)?,
-        })
+        Ok(Self(cid::Cid::try_from(s)?))
     }
 }
 
 impl Display for Cid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
+        write!(f, "{}", self.0)
     }
 }
 

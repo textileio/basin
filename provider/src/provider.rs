@@ -28,7 +28,8 @@ where
 {
 }
 
-/// Get to the underlying Tendermint client if necessary, for example to query the state of transactions.
+/// Get to the underlying Tendermint client if necessary,
+/// for example, to query the state of transactions.
 pub trait TendermintClient<C>
 where
     C: Client + Send + Sync,
@@ -140,6 +141,7 @@ pub trait QueryProvider: Send + Sync {
     async fn query(&self, query: FvmQuery, height: FvmQueryHeight) -> anyhow::Result<AbciQuery>;
 }
 
+/// Controls how the provider waits for the result of a transaction.
 #[derive(Debug, Default, Copy, Clone)]
 pub enum BroadcastMode {
     /// Return immediately after the transaction is broadcasted without waiting for check results.
@@ -164,28 +166,38 @@ impl FromStr for BroadcastMode {
     }
 }
 
+/// The current status of a transaction.
 #[derive(Debug, Copy, Clone, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TxStatus {
+    /// The transaction is in the memory pool waiting to be included in a block.
     Pending,
+    /// The transaction has been committed to a finalized block.
     Committed,
 }
 
+/// The receipt of a transaction.
 #[derive(Debug, Copy, Clone, Serialize)]
-pub struct Tx<T> {
+pub struct TxReceipt<T> {
+    /// The transaction's current status.
     pub status: TxStatus,
+    /// The hash of the transaction.
     pub hash: Hash,
+    /// The block height at which the transaction was included.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<Height>,
+    /// Gas used by the transaction.
     #[serde(skip_serializing_if = "i64::is_zero")]
     pub gas_used: i64,
+    /// Data returned by the transaction.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
 }
 
-impl<D> Tx<D> {
+impl<D> TxReceipt<D> {
+    /// Create a new receipt with status pending.
     pub fn pending(hash: Hash) -> Self {
-        Tx {
+        TxReceipt {
             status: TxStatus::Pending,
             hash,
             height: None,
@@ -194,8 +206,9 @@ impl<D> Tx<D> {
         }
     }
 
+    /// Create a new receipt with status committed.
     pub fn committed(hash: Hash, height: Height, gas_used: i64, data: Option<D>) -> Self {
-        Tx {
+        TxReceipt {
             status: TxStatus::Committed,
             hash,
             height: Some(height),
@@ -214,7 +227,7 @@ pub trait TxProvider: Send + Sync {
         message: ChainMessage,
         broadcast_mode: BroadcastMode,
         f: F,
-    ) -> anyhow::Result<Tx<T>>
+    ) -> anyhow::Result<TxReceipt<T>>
     where
         F: FnOnce(&DeliverTx) -> anyhow::Result<T> + Sync + Send,
         T: Sync + Send;
