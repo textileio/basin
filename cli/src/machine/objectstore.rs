@@ -38,7 +38,7 @@ use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 
 use crate::{get_rpc_url, get_subnet_id, parse_range_arg, print_json, BroadcastMode, Cli, TxArgs};
 
-const MAX_INTERNAL_OBJECT_LENGTH: u64 = 1024;
+const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
 
 #[derive(Clone, Debug, Args)]
 pub struct ObjectstoreArgs {
@@ -87,7 +87,7 @@ struct ObjectstorePutArgs {
     #[arg(short, long)]
     key: String,
     /// Overwrite the object if it already exists.
-    #[arg(short, long, action)]
+    #[arg(short, long)]
     overwrite: bool,
     /// Input file (or stdin) containing the object to upload.
     #[clap(default_value = "-")]
@@ -238,55 +238,54 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             let object_client = ObjectClient::new(object_api_url);
 
             let mut reader = input.into_async_reader().await?;
-            let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH as usize];
+            let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
 
             let upload_progress = ObjectProgressBar::new(cli.quiet);
 
-            match reader.read_exact(&mut first_chunk).await {
+            match reader.read(&mut first_chunk).await {
                 Ok(first_chunk_size) => {
-                    let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
-                    // Preprocess Object before uploading
-                    upload_progress.show_processing();
-                    let (object_cid, bytes_read) =
-                        objectstore::process_object(reader, tx, first_chunk).await?;
+                    if first_chunk_size > MAX_INTERNAL_OBJECT_LENGTH {
+                        let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
+                        // Preprocess Object before uploading
+                        upload_progress.show_processing();
+                        let (object_cid, bytes_read) =
+                            objectstore::process_object(reader, tx, first_chunk).await?;
 
-                    // Upload Object with signature
-                    upload_progress.show_uploading();
-                    let response_cid = machine
-                        .upload(
-                            &mut signer,
-                            object_client,
-                            key.clone(),
-                            object_cid,
-                            first_chunk_size + bytes_read,
-                            *overwrite,
-                            subnet_id.chain_id(),
-                            rx,
-                        )
-                        .await?;
-                    upload_progress.show_uploaded(response_cid);
+                        // Upload Object with signature
+                        upload_progress.show_uploading();
+                        let response_cid = machine
+                            .upload(
+                                &mut signer,
+                                object_client,
+                                key.clone(),
+                                object_cid,
+                                first_chunk_size + bytes_read,
+                                *overwrite,
+                                subnet_id.chain_id(),
+                                rx,
+                            )
+                            .await?;
+                        upload_progress.show_uploaded(response_cid);
 
-                    // Verify uploaded CID with locally computed CID
-                    assert_eq!(response_cid, object_cid);
-                    upload_progress.show_cid_verified();
-                    upload_progress.finish();
+                        // Verify uploaded CID with locally computed CID
+                        assert_eq!(response_cid, object_cid);
+                        upload_progress.show_cid_verified();
+                        upload_progress.finish();
 
-                    // Broadcast transaction with Object's CID
-                    let params = PutParams {
-                        key: key.as_bytes().to_vec(),
-                        kind: ObjectKind::External(object_cid),
-                        overwrite: *overwrite,
-                    };
-                    let tx = machine
-                        .put(&provider, &mut signer, params, broadcast_mode, gas_params)
-                        .await?;
+                        // Broadcast transaction with Object's CID
+                        let params = PutParams {
+                            key: key.as_bytes().to_vec(),
+                            kind: ObjectKind::External(object_cid),
+                            overwrite: *overwrite,
+                        };
+                        let tx = machine
+                            .put(&provider, &mut signer, params, broadcast_mode, gas_params)
+                            .await?;
 
-                    print_json(&tx)
-                }
-                Err(e) => {
-                    // internal object
-                    if e.kind() == io::ErrorKind::UnexpectedEof {
-                        reader.read_to_end(&mut first_chunk).await?;
+                        print_json(&tx)
+                    } else {
+                        // Handle as an internal object
+                        first_chunk.truncate(first_chunk_size);
                         let tx = machine
                             .put(
                                 &provider,
@@ -300,12 +299,12 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                                 gas_params,
                             )
                             .await?;
+
                         upload_progress.finish();
                         print_json(&tx)
-                    } else {
-                        Err(e.into())
                     }
                 }
+                Err(e) => Err(e.into()),
             }
         }
         ObjectstoreCommands::Delete(ObjectstoreDeleteArgs {
