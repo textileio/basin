@@ -158,7 +158,8 @@ impl ObjectStore {
                 overwrite,
             };
             let serialized_params = RawBytes::serialize(params)?;
-            let message = signer
+            with_progress_bar(progress_bar.as_ref(), |p| p.finish());
+            signer
                 .transaction(
                     self.address,
                     Default::default(),
@@ -167,9 +168,7 @@ impl ObjectStore {
                     None,
                     gas_params,
                 )
-                .await?;
-            with_progress_bar(progress_bar.as_ref(), |p| p.finish());
-            message
+                .await?
         };
 
         provider.perform(message, broadcast_mode, decode_cid).await
