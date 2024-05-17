@@ -19,7 +19,8 @@ use adm_provider::{
 };
 use adm_sdk::{
     machine::{objectstore::ObjectStore, Machine},
-    ObjectProgressBar, TxParams,
+    progress_bar::ObjectProgressBar,
+    TxParams,
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 

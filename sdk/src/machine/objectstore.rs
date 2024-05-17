@@ -38,7 +38,7 @@ use adm_signer::Signer;
 
 use crate::{
     machine::{deploy_machine, objectstore, DeployTx, Machine},
-    ObjectProgressBar,
+    progress_bar::ObjectProgressBar,
 };
 
 const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
@@ -92,7 +92,7 @@ impl ObjectStore {
         overwrite: bool,
         broadcast_mode: BroadcastMode,
         gas_params: GasParams,
-        progress_bar: Option<crate::ObjectProgressBar>,
+        progress_bar: Option<ObjectProgressBar>,
     ) -> anyhow::Result<TxReceipt<Cid>>
     where
         C: Client + Send + Sync,
@@ -249,7 +249,7 @@ impl ObjectStore {
         range: &Option<String>,
         height: FvmQueryHeight,
         mut writer: impl AsyncWrite + Unpin + Send + 'static,
-        progress_bar: Option<crate::ObjectProgressBar>,
+        progress_bar: Option<ObjectProgressBar>,
     ) -> anyhow::Result<()> {
         let params = GetParams {
             key: key.as_bytes().to_vec(),
