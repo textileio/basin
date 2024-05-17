@@ -24,6 +24,7 @@ use adm_signer::Signer;
 pub mod accumulator;
 pub mod objectstore;
 
+/// Deployed machine transaction receipt details.
 #[derive(Copy, Clone, Debug, Serialize)]
 pub struct DeployTx {
     pub hash: Hash,
@@ -31,8 +32,14 @@ pub struct DeployTx {
     pub gas_used: i64,
 }
 
+/// Trait implemented by different machine kinds.
+/// This is modeled after Ethers contract deployment UX.
 #[async_trait]
 pub trait Machine: Send + Sync + Sized {
+    /// Create a new machine instance using the given [`Provider`] and [`Signer`].
+    ///
+    /// [`WriteAccess::OnlyOwner`]: Only the owner will be able to mutate the machine.
+    /// [`WriteAccess::Public`]: Any account can mutate the machine.
     async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
@@ -42,14 +49,18 @@ pub trait Machine: Send + Sync + Sized {
     where
         C: Client + Send + Sync;
 
+    /// Create a machine instance from an existing machine [`Address`].
     fn attach(address: Address) -> Self;
 
+    /// Returns the machine [`Address`].
     fn address(&self) -> Address;
 }
 
+/// A static wrapper around any kind of machine.
 pub struct DefaultMachine {}
 
 impl DefaultMachine {
+    /// Get machine metadata (the owner and machine kind).
     pub async fn metadata(
         provider: &impl QueryProvider,
         address: Address,
@@ -61,6 +72,7 @@ impl DefaultMachine {
     }
 }
 
+/// Deploys a machine.
 async fn deploy_machine<C>(
     provider: &impl Provider<C>,
     signer: &mut impl Signer,

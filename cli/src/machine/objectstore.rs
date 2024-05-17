@@ -8,7 +8,7 @@ use clap_stdin::FileOrStdin;
 use console::Emoji;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_actor_objectstore::{
-    GetParams, ListParams, Object, ObjectKind, ObjectListItem, PutParams,
+    DeleteParams, GetParams, ListParams, Object, ObjectKind, ObjectListItem, PutParams,
 };
 use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
@@ -50,11 +50,13 @@ pub struct ObjectstoreArgs {
 enum ObjectstoreCommands {
     /// Create a new object store.
     Create(ObjectstoreCreateArgs),
-    /// Put an object into the object store.
+    /// Put an object with a key prefix.
     Put(ObjectstorePutArgs),
-    /// Get an object from the object store.
+    /// Delete an object.
+    Delete(ObjectstoreDeleteArgs),
+    /// Get an object.
     Get(ObjectstoreGetArgs),
-    /// List objects in the object store.
+    /// List objects.
     List(ObjectstoreListArgs),
 }
 
@@ -97,12 +99,33 @@ struct ObjectstorePutArgs {
     tx_args: TxArgs,
 }
 
+#[derive(Clone, Debug, Parser)]
+struct ObjectstoreDeleteArgs {
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: SecretKey,
+    /// Object store machine address.
+    #[arg(short, long, value_parser = parse_address)]
+    address: Address,
+    /// Key of the object to delete.
+    key: String,
+    /// Broadcast mode for the transaction.
+    #[arg(short, long, value_enum, env, default_value_t = BroadcastMode::Commit)]
+    broadcast_mode: BroadcastMode,
+    #[command(flatten)]
+    tx_args: TxArgs,
+}
+
 #[derive(Clone, Debug, Args)]
 struct ObjectstoreAddressArgs {
     /// Object store machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
     /// Query block height.
+    /// Possible values:
+    /// "committed" (latest committed block),
+    /// "pending" (consider pending state changes),
+    /// or a specific block height, e.g., "123".
     #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
@@ -123,6 +146,10 @@ struct ObjectstoreGetArgs {
     #[arg(short, long)]
     range: Option<String>,
     /// Query block height.
+    /// Possible values:
+    /// "committed" (latest committed block),
+    /// "pending" (consider pending state changes),
+    /// or a specific block height, e.g., "123".
     #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
@@ -145,10 +172,15 @@ struct ObjectstoreListArgs {
     #[arg(short, long, default_value_t = 0)]
     limit: u64,
     /// Query block height.
+    /// Possible values:
+    /// "committed" (latest committed block),
+    /// "pending" (consider pending state changes),
+    /// or a specific block height, e.g., "123".
     #[arg(short, long, value_parser = parse_query_height, default_value = "committed")]
     height: FvmQueryHeight,
 }
 
+/// Objectstore commmands handler.
 pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Result<()> {
     let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
     let subnet_id = get_subnet_id(&cli)?;
@@ -275,6 +307,36 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     }
                 }
             }
+        }
+        ObjectstoreCommands::Delete(ObjectstoreDeleteArgs {
+            private_key,
+            key,
+            address,
+            broadcast_mode,
+            tx_args,
+        }) => {
+            let TxParams {
+                sequence,
+                gas_params,
+            } = tx_args.to_tx_params();
+            let broadcast_mode = broadcast_mode.get();
+            let mut signer = Wallet::new_secp256k1(
+                private_key.clone(),
+                AccountKind::Ethereum,
+                subnet_id.clone(),
+            )?;
+            signer.set_sequence(sequence, &provider).await?;
+
+            let machine = ObjectStore::attach(*address);
+
+            let params = DeleteParams {
+                key: key.as_bytes().to_vec(),
+            };
+            let tx = machine
+                .delete(&provider, &mut signer, params, broadcast_mode, gas_params)
+                .await?;
+
+            print_json(&tx)
         }
         ObjectstoreCommands::Get(args) => {
             let machine = ObjectStore::attach(args.address);

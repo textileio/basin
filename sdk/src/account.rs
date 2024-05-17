@@ -16,9 +16,11 @@ use adm_signer::Signer;
 
 use crate::ipc::{manager::EvmManager, subnet::EVMSubnet};
 
+/// A static wrapper around ADM account methods.
 pub struct Account {}
 
 impl Account {
+    /// Get machines owned by the given [`Signer`].
     pub async fn machines(
         provider: &impl QueryProvider,
         signer: &impl Signer,
@@ -33,6 +35,7 @@ impl Account {
         Ok(response.value)
     }
 
+    /// Get the sequence (nonce) for a [`Signer`] at the given height.
     pub async fn sequence(
         provider: &impl QueryProvider,
         signer: &impl Signer,
@@ -49,10 +52,12 @@ impl Account {
         }
     }
 
+    /// Get the balance for a [`Signer`] at the given height.
     pub async fn balance(signer: &impl Signer, subnet: EVMSubnet) -> anyhow::Result<TokenAmount> {
         EvmManager::balance(signer.address(), subnet).await
     }
 
+    /// Deposit funds from a [`Signer`] to an address in the given subnet.
     pub async fn deposit(
         signer: &impl Signer,
         to: Address,
@@ -62,6 +67,7 @@ impl Account {
         EvmManager::deposit(signer, to, subnet, amount).await
     }
 
+    /// Withdraw funds from a [`Signer`] to an address in the given subnet.
     pub async fn withdraw(
         signer: &impl Signer,
         to: Address,
@@ -71,6 +77,7 @@ impl Account {
         EvmManager::withdraw(signer, to, subnet, amount).await
     }
 
+    /// Transfer funds from [`Signer`] to an address in the given subnet.
     pub async fn transfer(
         signer: &impl Signer,
         to: Address,

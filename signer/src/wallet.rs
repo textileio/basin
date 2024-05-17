@@ -20,12 +20,20 @@ use adm_provider::{message::GasParams, QueryProvider};
 use crate::signer::Signer;
 use crate::SubnetID;
 
+/// Indicates how an [`Address`] should be derived from a public key.
+///
+/// [`AccountKind::Regular`] refers to native FVM addresses.
+/// [`AccountKind::Ethereum`] refers to Ethereum style addresses.
 #[derive(Debug, Clone)]
 pub enum AccountKind {
     Regular,
     Ethereum,
 }
 
+/// [`Signer`] implementation that relies on a local [`SecretKey`] to sign messages.
+///
+/// Note, because [`Wallet`] manages the account's sequence (nonce) with a mutex,
+/// using it across threads won't increase the speed at which it can sign messages.
 #[derive(Debug, Clone)]
 pub struct Wallet {
     addr: Address,
@@ -99,6 +107,9 @@ impl Signer for Wallet {
 }
 
 impl Wallet {
+    /// Returns a new secp256k1 [`Wallet`].
+    ///
+    /// Note, subnets only support [`AccountKind::Ethereum`].
     pub fn new_secp256k1(
         sk: SecretKey,
         kind: AccountKind,
@@ -138,8 +149,8 @@ impl Wallet {
         }
     }
 
-    /// Set the sequence to the given value or initialize it
-    /// from the on-chain state.
+    /// Set the sequence to the given value.
+    /// If `maybe_sequence` is `None`, it's fetched from the actor's on-chain state.
     pub async fn set_sequence(
         &mut self,
         maybe_sequence: Option<u64>,

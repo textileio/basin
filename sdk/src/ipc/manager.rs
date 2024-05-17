@@ -42,6 +42,7 @@ const ETH_PROVIDER_POLLING_TIME: Duration = Duration::from_secs(1);
 /// roots (like Calibration and mainnet).
 const TRANSACTION_RECEIPT_RETRIES: usize = 200;
 
+/// Returns an Ethereum provider for the given subnet configuration.
 fn get_eth_provider(subnet: &EVMSubnet) -> anyhow::Result<Provider<Http>> {
     let url = subnet.provider_http.clone();
     let auth_token = subnet.auth_token.clone();
@@ -67,6 +68,7 @@ fn get_eth_provider(subnet: &EVMSubnet) -> anyhow::Result<Provider<Http>> {
     Ok(provider)
 }
 
+/// Returns an Ethereum signer using [`Signer`] for the given subnet configuration.
 fn get_eth_signer(
     signer: &impl Signer,
     subnet: &EVMSubnet,
@@ -89,6 +91,8 @@ fn get_eth_signer(
     Ok(SignerMiddleware::new(provider, wallet))
 }
 
+/// Returns an interface to a [`GatewayManagerFacet`]
+/// using [`Signer`] for the given subnet configuration.
 fn get_gateway(
     signer: &impl Signer,
     subnet: &EVMSubnet,
@@ -102,9 +106,11 @@ fn get_gateway(
     )))
 }
 
+/// A static wrapper around common EVM subnet methods.
 pub struct EvmManager {}
 
 impl EvmManager {
+    /// Get the balance of an account in a subnet.
     pub async fn balance(address: Address, subnet: EVMSubnet) -> anyhow::Result<TokenAmount> {
         let provider = get_eth_provider(&subnet)?;
         let balance = provider
@@ -113,6 +119,7 @@ impl EvmManager {
         Ok(TokenAmount::from_atto(balance.as_u128()))
     }
 
+    /// Deposit funds into a subnet.
     pub async fn deposit(
         signer: &impl Signer,
         to: Address,
@@ -130,9 +137,10 @@ impl EvmManager {
         let mut call = gateway.fund(subnet_id, FvmAddress::try_from(to)?);
         call.tx.set_value(value);
 
-        gateway_send(&gateway, call).await
+        client_send(gateway.client(), call).await
     }
 
+    /// Withdraw funds from a subnet.
     pub async fn withdraw(
         signer: &impl Signer,
         to: Address,
@@ -149,9 +157,10 @@ impl EvmManager {
         let mut call = gateway.release(FvmAddress::try_from(to)?);
         call.tx.set_value(value);
 
-        gateway_send(&gateway, call).await
+        client_send(gateway.client(), call).await
     }
 
+    /// Transfer funds between two accounts in a subnet.
     pub async fn transfer(
         signer: &impl Signer,
         to: Address,
@@ -174,11 +183,12 @@ impl EvmManager {
     }
 }
 
-async fn gateway_send(
-    gateway: &GatewayManagerFacet<DefaultSignerMiddleware>,
+/// Sends a contract call with configured retries using the provided client.
+async fn client_send(
+    client: Arc<DefaultSignerMiddleware>,
     call: ContractCall<DefaultSignerMiddleware, ()>,
 ) -> anyhow::Result<TransactionReceipt> {
-    let call = call_with_premium_estimation(gateway.client(), call).await?;
+    let call = call_with_premium_estimation(client, call).await?;
     let tx = call.send().await?;
     match tx.retries(TRANSACTION_RECEIPT_RETRIES).await? {
         Some(receipt) => Ok(receipt),
@@ -205,7 +215,7 @@ where
 /// Returns an estimation of an optimal `gas_premium` and `gas_fee_cap`
 /// for a transaction considering the average premium, base_fee and reward percentile from
 /// past blocks
-/// This is adaptation of ethers' `eip1559_default_estimator`:
+/// This is an adaptation of ethers' `eip1559_default_estimator`:
 /// https://github.com/gakonst/ethers-rs/blob/5dcd3b7e754174448f9a8cbfc0523896609629f9/ethers-core/src/utils/mod.rs#L476
 async fn premium_estimation(signer: Arc<DefaultSignerMiddleware>) -> anyhow::Result<(U256, U256)> {
     let base_fee_per_gas = signer

@@ -17,9 +17,10 @@ use tendermint_rpc::{
     WebSocketClientDriver, WebSocketClientUrl,
 };
 
-use crate::provider::{BroadcastMode, QueryProvider, Tx, TxProvider};
+use crate::provider::{BroadcastMode, QueryProvider, TxProvider, TxReceipt};
 use crate::{Provider, TendermintClient};
 
+/// A JSON RPC ADM chain provider.
 #[derive(Clone)]
 pub struct JsonRpcProvider<C = HttpClient> {
     inner: C,
@@ -76,7 +77,7 @@ where
         message: ChainMessage,
         broadcast_mode: BroadcastMode,
         f: F,
-    ) -> anyhow::Result<Tx<T>>
+    ) -> anyhow::Result<TxReceipt<T>>
     where
         F: FnOnce(&DeliverTx) -> anyhow::Result<T> + Sync + Send,
         T: Sync + Send,
@@ -86,7 +87,7 @@ where
                 let data = crate::message::serialize(&message)?;
                 let response = self.inner.broadcast_tx_async(data).await?;
 
-                Ok(Tx::pending(response.hash))
+                Ok(TxReceipt::pending(response.hash))
             }
             BroadcastMode::Sync => {
                 let data = crate::message::serialize(&message)?;
@@ -94,7 +95,7 @@ where
                 if response.code.is_err() {
                     return Err(anyhow!(response.log));
                 }
-                Ok(Tx::pending(response.hash))
+                Ok(TxReceipt::pending(response.hash))
             }
             BroadcastMode::Commit => {
                 let data = crate::message::serialize(&message)?;
@@ -114,7 +115,7 @@ where
                 let return_data = f(&response.deliver_tx)
                     .context("error decoding data from deliver_tx in commit")?;
 
-                Ok(Tx::committed(
+                Ok(TxReceipt::committed(
                     response.hash,
                     response.height,
                     response.deliver_tx.gas_used,
@@ -125,6 +126,7 @@ where
     }
 }
 
+/// Format transaction receipt errors.
 fn format_err(info: &str, log: &str) -> String {
     format!("info: {}; log: {}", info, log)
 }

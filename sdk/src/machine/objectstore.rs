@@ -32,13 +32,13 @@ use adm_provider::{
     message::{local_message, object_upload_message, GasParams},
     object::ObjectService,
     response::{decode_bytes, decode_cid, Cid},
-    BroadcastMode, Provider, QueryProvider, Tx,
+    BroadcastMode, Provider, QueryProvider, TxReceipt,
 };
 use adm_signer::Signer;
 
 use crate::machine::{deploy_machine, DeployTx, Machine};
-use crate::TxParams;
 
+/// A machine for S3-like object storage.
 pub struct ObjectStore {
     address: Address,
 }
@@ -75,6 +75,7 @@ impl Machine for ObjectStore {
 }
 
 impl ObjectStore {
+    /// Put an object into the object store.
     pub async fn put<C>(
         &self,
         provider: &impl Provider<C>,
@@ -82,7 +83,7 @@ impl ObjectStore {
         params: PutParams,
         broadcast_mode: BroadcastMode,
         gas_params: GasParams,
-    ) -> anyhow::Result<Tx<Cid>>
+    ) -> anyhow::Result<TxReceipt<Cid>>
     where
         C: Client + Send + Sync,
     {
@@ -106,6 +107,7 @@ impl ObjectStore {
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
+    // TODO: This shouldn't be public.
     #[allow(clippy::too_many_arguments)]
     pub async fn upload(
         &self,
@@ -146,14 +148,15 @@ impl ObjectStore {
         Ok(response.cid)
     }
 
+    /// Delete an object.
     pub async fn delete<C>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         params: DeleteParams,
         broadcast_mode: BroadcastMode,
-        args: TxParams,
-    ) -> anyhow::Result<Tx<Cid>>
+        gas_params: GasParams,
+    ) -> anyhow::Result<TxReceipt<Cid>>
     where
         C: Client + Send + Sync,
     {
@@ -165,12 +168,13 @@ impl ObjectStore {
                 DeleteObject as u64,
                 params,
                 None,
-                args.gas_params,
+                gas_params,
             )
             .await?;
         provider.perform(message, broadcast_mode, decode_cid).await
     }
 
+    /// Get an object at the given height.
     pub async fn get(
         &self,
         provider: &impl QueryProvider,
@@ -183,6 +187,9 @@ impl ObjectStore {
         Ok(response.value)
     }
 
+    /// Download an object.
+    ///
+    /// TODO: Handle block height query.
     pub async fn download(
         &self,
         object_client: impl ObjectService,
@@ -196,6 +203,9 @@ impl ObjectStore {
         Ok(())
     }
 
+    /// List objects at the given height.
+    ///
+    /// Use [`ListParams`] for filtering and pagination.
     pub async fn list(
         &self,
         provider: &impl QueryProvider,

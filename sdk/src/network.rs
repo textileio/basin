@@ -32,6 +32,7 @@ pub fn use_testnet_addresses() {
     set_current_network(FvmNetwork::Testnet);
 }
 
+/// Network presets for a subnet configuration and RPC URLs.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Network {
     /// Network presets for mainnet.
@@ -43,6 +44,7 @@ pub enum Network {
 }
 
 impl Network {
+    /// Returns the network [`SubnetID`].
     pub fn subnet(&self) -> anyhow::Result<SubnetID> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -51,6 +53,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`Url`] of the CometBFT PRC API.
     pub fn rpc_url(&self) -> anyhow::Result<Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -59,6 +62,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`Url`] of the Object API.
     pub fn object_api_url(&self) -> anyhow::Result<Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -67,6 +71,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`reqwest::Url`] of the EVM PRC API.
     pub fn evm_rpc_url(&self) -> anyhow::Result<reqwest::Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -75,6 +80,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`Address`] of the EVM Gateway contract.
     pub fn evm_gateway(&self) -> anyhow::Result<Address> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -83,6 +89,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`Address`] of the EVM Registry contract.
     pub fn evm_registry(&self) -> anyhow::Result<Address> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -91,6 +98,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`reqwest::Url`] of the parent EVM PRC API.
     pub fn parent_evm_rpc_url(&self) -> anyhow::Result<reqwest::Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -99,6 +107,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`Address`] of the parent EVM Gateway contract.
     pub fn parent_evm_gateway(&self) -> anyhow::Result<Address> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -107,6 +116,7 @@ impl Network {
         }
     }
 
+    /// Returns the network [`Address`] of the parent EVM Registry contract.
     pub fn parent_evm_registry(&self) -> anyhow::Result<Address> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
