@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use cid::Cid;
 use futures_util::StreamExt;
+use fvm_shared::address::Address;
 use reqwest::multipart::{Form, Part};
 use reqwest::Client;
 use tendermint_rpc::Url;
@@ -31,8 +32,8 @@ pub trait ObjectService {
     /// Download an object from a node's Object API.
     async fn download(
         &self,
-        address: String,
-        key: String,
+        address: Address,
+        key: &str,
         range: Option<String>,
         height: u64,
         writer: impl AsyncWrite + Unpin + Send + 'static,
@@ -87,8 +88,8 @@ impl ObjectService for ObjectClient {
 
     async fn download(
         &self,
-        address: String,
-        key: String,
+        address: Address,
+        key: &str,
         range: Option<String>,
         height: u64,
         mut writer: impl AsyncWrite + Unpin + Send + 'static,

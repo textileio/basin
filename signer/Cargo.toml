@@ -15,6 +15,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fnv = { workspace = true }
 hex = { workspace = true }
+rand = { workspace = true }
 tokio = { workspace = true }
 
 fvm_ipld_encoding = { workspace = true }
@@ -30,5 +31,4 @@ ipc-api = { workspace = true }
 adm_provider = { path = "../provider" }
 
 [dev-dependencies]
-rand = { workspace = true }
 serde_json = { workspace = true }

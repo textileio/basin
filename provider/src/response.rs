@@ -45,7 +45,7 @@ pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<Cid> {
         .map_err(|e| anyhow!("error parsing as Cid: {e}"))
 }
 
-/// Display-friendly version of [`cid::Cid`].
+/// JSON serialization friendly version of [`cid::Cid`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cid(cid::Cid);
 

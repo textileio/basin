@@ -3,6 +3,7 @@
 
 use clap::{error::ErrorKind, Args, CommandFactory, Subcommand};
 use fendermint_crypto::SecretKey;
+use fendermint_vm_actor_interface::eam::EthAddress;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::{address::Address, econ::TokenAmount};
 use reqwest::Url;
@@ -11,9 +12,10 @@ use std::time::Duration;
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
-    util::{parse_address, parse_query_height, parse_token_amount},
+    util::{get_delegated_address, parse_address, parse_query_height, parse_token_amount},
 };
 use adm_sdk::{account::Account, ipc::subnet::EVMSubnet};
+use adm_signer::key::random_secretkey;
 use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Void, Wallet};
 
 use crate::{get_rpc_url, get_subnet_id, print_json, Cli};
@@ -26,6 +28,10 @@ pub struct AccountArgs {
 
 #[derive(Clone, Debug, Subcommand)]
 enum AccountCommands {
+    /// Create a new account from a random seed.
+    Create,
+    /// Get account address information.
+    Address(AddressArgs),
     /// List machines by owner in a subnet.
     Machines(AddressArgs),
     /// Get account sequence in a subnet.
@@ -123,6 +129,23 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
     let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
+        AccountCommands::Create => {
+            let sk = random_secretkey();
+            let pk = sk.public_key().serialize();
+            let address = Address::from(EthAddress::new_secp256k1(&pk)?);
+            let eth_address = get_delegated_address(address)?;
+
+            let sk_hex = hex::encode(sk.serialize());
+            print_json(
+                &json!({"private_key": sk_hex, "address": eth_address, "fvm_address": address.to_string()}),
+            )
+        }
+        AccountCommands::Address(args) => {
+            let address = get_address(args.clone(), &subnet_id)?;
+            let eth_address = get_delegated_address(address)?;
+
+            print_json(&json!({"address": eth_address, "fvm_address": address.to_string()}))
+        }
         AccountCommands::Machines(args) => {
             let address = get_address(args.clone(), &subnet_id)?;
             let metadata = Account::machines(&provider, &Void::new(address), args.height).await?;

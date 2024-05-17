@@ -4,7 +4,7 @@
 use clap::{Args, Parser, Subcommand};
 use clap_stdin::FileOrStdin;
 use fendermint_actor_machine::WriteAccess;
-use fendermint_actor_objectstore::{DeleteParams, ListParams, ObjectListItem};
+use fendermint_actor_objectstore::ObjectListItem;
 use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
@@ -18,7 +18,10 @@ use adm_provider::{
     util::{parse_address, parse_query_height},
 };
 use adm_sdk::{
-    machine::{objectstore::ObjectStore, Machine},
+    machine::{
+        objectstore::{ListParams, ObjectStore},
+        Machine,
+    },
     progress_bar::ObjectProgressBar,
     TxParams,
 };
@@ -229,7 +232,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     &provider,
                     &mut signer,
                     object_client,
-                    subnet_id.chain_id(),
                     input.into_async_reader().await?,
                     key,
                     *overwrite,
@@ -238,6 +240,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                     Some(upload_progress),
                 )
                 .await?;
+
             print_json(&tx)
         }
         ObjectstoreCommands::Delete(ObjectstoreDeleteArgs {
@@ -261,11 +264,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
 
             let machine = ObjectStore::attach(*address);
 
-            let params = DeleteParams {
-                key: key.as_bytes().to_vec(),
-            };
             let tx = machine
-                .delete(&provider, &mut signer, params, broadcast_mode, gas_params)
+                .delete(&provider, &mut signer, key, broadcast_mode, gas_params)
                 .await?;
 
             print_json(&tx)
@@ -278,32 +278,29 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .unwrap_or(cli.network.get().object_api_url()?);
             let object_client = ObjectClient::new(object_api_url);
             let progress_bar = ObjectProgressBar::new(cli.quiet);
-            let key = args.key.as_str();
             let stdout = io::stdout();
+
             machine
                 .get(
                     &provider,
                     object_client,
-                    key,
-                    &args.range,
+                    &args.key,
+                    args.range.clone(),
                     args.height,
                     stdout,
                     Some(progress_bar),
                 )
-                .await?;
-            Ok(())
+                .await
         }
         ObjectstoreCommands::List(args) => {
             let machine = ObjectStore::attach(args.address);
 
-            let prefix = args.prefix.as_str();
-            let delimiter = args.delimiter.as_str();
             let list = machine
                 .list(
                     &provider,
                     ListParams {
-                        prefix: prefix.as_bytes().to_vec(),
-                        delimiter: delimiter.as_bytes().to_vec(),
+                        prefix: args.prefix.clone(),
+                        delimiter: args.delimiter.clone(),
                         offset: args.offset,
                         limit: args.limit,
                     },
