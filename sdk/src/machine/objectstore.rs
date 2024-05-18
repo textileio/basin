@@ -44,9 +44,9 @@ use crate::{
 
 const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
 
-/// Params for listing objects.
+/// Object query params.
 #[derive(Default, Debug)]
-pub struct ListParams {
+pub struct QueryParams {
     /// The prefix to filter objects by.
     pub prefix: String,
     /// The delimiter used to define object hierarchy.
@@ -89,6 +89,8 @@ pub struct ObjectStore {
 
 #[async_trait]
 impl Machine for ObjectStore {
+    const KIND: Kind = Kind::ObjectStore;
+
     async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
@@ -119,9 +121,9 @@ impl Machine for ObjectStore {
 }
 
 impl ObjectStore {
-    /// Put an object into the object store.
+    /// Add an object into the object store.
     #[allow(clippy::too_many_arguments)]
-    pub async fn put<C>(
+    pub async fn add<C>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
@@ -364,13 +366,13 @@ impl ObjectStore {
         Ok(())
     }
 
-    /// List objects at the given height.
+    /// Query for objects with params at the given height.
     ///
-    /// Use [`ListParams`] for filtering and pagination.
-    pub async fn list(
+    /// Use [`QueryParams`] for filtering and pagination.
+    pub async fn query(
         &self,
         provider: &impl QueryProvider,
-        params: ListParams,
+        params: QueryParams,
         height: FvmQueryHeight,
     ) -> anyhow::Result<Option<ObjectList>> {
         let params = fendermint_actor_objectstore::ListParams {

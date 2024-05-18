@@ -19,15 +19,17 @@ use adm_provider::{
 };
 use adm_sdk::{
     machine::{
-        objectstore::{ListParams, ObjectStore},
+        objectstore::{ObjectStore, QueryParams},
         Machine,
     },
     progress_bar::ObjectProgressBar,
     TxParams,
 };
-use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
+use adm_signer::{key::parse_secret_key, AccountKind, Void, Wallet};
 
-use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, TxArgs};
+use crate::{
+    get_address, get_rpc_url, get_subnet_id, print_json, AddressArgs, BroadcastMode, Cli, TxArgs,
+};
 
 #[derive(Clone, Debug, Args)]
 pub struct ObjectstoreArgs {
@@ -39,14 +41,17 @@ pub struct ObjectstoreArgs {
 enum ObjectstoreCommands {
     /// Create a new object store.
     Create(ObjectstoreCreateArgs),
-    /// Put an object with a key prefix.
-    Put(ObjectstorePutArgs),
+    /// List object stores.
+    #[clap(alias = "ls")]
+    List(AddressArgs),
+    /// Add an object with a key prefix.
+    Add(ObjectstorePutArgs),
     /// Delete an object.
     Delete(ObjectstoreDeleteArgs),
     /// Get an object.
     Get(ObjectstoreGetArgs),
-    /// List objects.
-    List(ObjectstoreListArgs),
+    /// Query for objects.
+    Query(ObjectstoreQueryArgs),
 }
 
 #[derive(Clone, Debug, Args)]
@@ -144,7 +149,7 @@ struct ObjectstoreGetArgs {
 }
 
 #[derive(Clone, Debug, Args)]
-struct ObjectstoreListArgs {
+struct ObjectstoreQueryArgs {
     /// Object store machine address.
     #[arg(short, long, value_parser = parse_address)]
     address: Address,
@@ -198,7 +203,18 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
 
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
-        ObjectstoreCommands::Put(ObjectstorePutArgs {
+        ObjectstoreCommands::List(args) => {
+            let address = get_address(args.clone(), &subnet_id)?;
+            let metadata = ObjectStore::list(&provider, &Void::new(address), args.height).await?;
+
+            let metadata = metadata
+                .iter()
+                .map(|m| json!({"address": m.address.to_string(), "kind": m.kind}))
+                .collect::<Vec<Value>>();
+
+            print_json(&metadata)
+        }
+        ObjectstoreCommands::Add(ObjectstorePutArgs {
             private_key,
             object_api_url,
             key,
@@ -228,7 +244,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             let upload_progress = ObjectProgressBar::new(cli.quiet);
 
             let tx = machine
-                .put(
+                .add(
                     &provider,
                     &mut signer,
                     object_client,
@@ -292,13 +308,13 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 )
                 .await
         }
-        ObjectstoreCommands::List(args) => {
+        ObjectstoreCommands::Query(args) => {
             let machine = ObjectStore::attach(args.address);
 
             let list = machine
-                .list(
+                .query(
                     &provider,
-                    ListParams {
+                    QueryParams {
                         prefix: args.prefix.clone(),
                         delimiter: args.delimiter.clone(),
                         offset: args.offset,

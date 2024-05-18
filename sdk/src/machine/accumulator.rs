@@ -47,6 +47,8 @@ pub struct Accumulator {
 
 #[async_trait]
 impl Machine for Accumulator {
+    const KIND: Kind = Kind::Accumulator;
+
     async fn new<C>(
         provider: &impl Provider<C>,
         signer: &mut impl Signer,

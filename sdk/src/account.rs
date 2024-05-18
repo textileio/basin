@@ -3,15 +3,10 @@
 
 use anyhow::anyhow;
 use ethers::prelude::TransactionReceipt;
-use fendermint_vm_actor_interface::adm::{
-    ListMetadataParams, Metadata, Method::ListMetadata, ADM_ACTOR_ADDR,
-};
 use fendermint_vm_message::query::FvmQueryHeight;
-use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{address::Address, econ::TokenAmount};
-use tendermint::abci::response::DeliverTx;
 
-use adm_provider::{message::local_message, response::decode_bytes, QueryProvider};
+use adm_provider::QueryProvider;
 use adm_signer::Signer;
 
 use crate::ipc::{manager::EvmManager, subnet::EVMSubnet};
@@ -20,21 +15,6 @@ use crate::ipc::{manager::EvmManager, subnet::EVMSubnet};
 pub struct Account {}
 
 impl Account {
-    /// Get machines owned by the given [`Signer`].
-    pub async fn machines(
-        provider: &impl QueryProvider,
-        signer: &impl Signer,
-        height: FvmQueryHeight,
-    ) -> anyhow::Result<Vec<Metadata>> {
-        let input = ListMetadataParams {
-            owner: signer.address(),
-        };
-        let params = RawBytes::serialize(input)?;
-        let message = local_message(ADM_ACTOR_ADDR, ListMetadata as u64, params);
-        let response = provider.call(message, height, decode_machines).await?;
-        Ok(response.value)
-    }
-
     /// Get the sequence (nonce) for a [`Signer`] at the given height.
     pub async fn sequence(
         provider: &impl QueryProvider,
@@ -86,10 +66,4 @@ impl Account {
     ) -> anyhow::Result<TransactionReceipt> {
         EvmManager::transfer(signer, to, subnet, amount).await
     }
-}
-
-fn decode_machines(deliver_tx: &DeliverTx) -> anyhow::Result<Vec<Metadata>> {
-    let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<Vec<Metadata>>(&data)
-        .map_err(|e| anyhow!("error parsing as Vec<adm::Metadata>: {e}"))
 }

@@ -8,7 +8,7 @@ use fendermint_actor_machine::WriteAccess;
 use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 
 use adm_provider::{
@@ -19,9 +19,11 @@ use adm_sdk::{
     machine::{accumulator::Accumulator, Machine},
     TxParams,
 };
-use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
+use adm_signer::{key::parse_secret_key, AccountKind, Void, Wallet};
 
-use crate::{get_rpc_url, get_subnet_id, print_json, BroadcastMode, Cli, TxArgs};
+use crate::{
+    get_address, get_rpc_url, get_subnet_id, print_json, AddressArgs, BroadcastMode, Cli, TxArgs,
+};
 
 #[derive(Clone, Debug, Args)]
 pub struct AccumulatorArgs {
@@ -33,6 +35,9 @@ pub struct AccumulatorArgs {
 enum AccumulatorCommands {
     /// Create a new accumulator.
     Create(AccumulatorCreateArgs),
+    /// List accumulators.
+    #[clap(alias = "ls")]
+    List(AddressArgs),
     /// Push a value.
     Push(AccumulatorPushArgs),
     /// Get leaf at a given index and height.
@@ -133,6 +138,17 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
                 Accumulator::new(&provider, &mut signer, write_access, gas_params).await?;
 
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
+        }
+        AccumulatorCommands::List(args) => {
+            let address = get_address(args.clone(), &subnet_id)?;
+            let metadata = Accumulator::list(&provider, &Void::new(address), args.height).await?;
+
+            let metadata = metadata
+                .iter()
+                .map(|m| json!({"address": m.address.to_string(), "kind": m.kind}))
+                .collect::<Vec<Value>>();
+
+            print_json(&metadata)
         }
         AccumulatorCommands::Push(AccumulatorPushArgs {
             private_key,
