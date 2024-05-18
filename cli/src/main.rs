@@ -61,6 +61,8 @@ enum Network {
     Mainnet,
     /// Network presets for Calibration (default pre-mainnet).
     Testnet,
+    /// Network presets for a local three-node network.
+    Localnet,
     /// Network presets for local development.
     Devnet,
 }
@@ -70,6 +72,7 @@ impl Network {
         match self {
             Network::Mainnet => SdkNetwork::Mainnet,
             Network::Testnet => SdkNetwork::Testnet,
+            Network::Localnet => SdkNetwork::Localnet,
             Network::Devnet => SdkNetwork::Devnet,
         }
     }
@@ -140,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
         .unwrap();
 
     match cli.network {
-        Network::Testnet | Network::Devnet => use_testnet_addresses(),
+        Network::Testnet | Network::Localnet | Network::Devnet => use_testnet_addresses(),
         _ => {}
     }
 

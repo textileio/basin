@@ -11,10 +11,11 @@ use adm_provider::util::parse_address;
 use adm_signer::SubnetID;
 
 const TESTNET_SUBNET_ID: &str = "/r314159/t410f7x4mh62k6oymmd3rfdjnzyjid7p2tstnbuvnc4i";
+const LOCALNET_SUBNET_ID: &str = "/r314159/t410f726d2jv6uj4mpkcbgg5ndlpp3l7dd5rlcpgzkoi";
 const DEVNET_SUBNET_ID: &str = "test";
 
 const TESTNET_RPC_URL: &str = "https://api.n1.testnet.basin.storage";
-const DEVNET_RPC_URL: &str = "http://127.0.0.1:26657";
+const LOCALNET_RPC_URL: &str = "http://127.0.0.1:26657";
 
 const TESTNET_EVM_RPC_URL: &str = "https://evm-api.n1.testnet.basin.storage";
 const TESTNET_EVM_GATEWAY_ADDRESS: &str = "0x77aa40b105843728088c0132e43fc44348881da8";
@@ -25,7 +26,7 @@ const TESTNET_PARENT_EVM_GATEWAY_ADDRESS: &str = "0x728F3B71EBD1358973AbCE325Fe4
 const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x2f71A1d47ccc2E13E646D4C1bcF89E3409114De8";
 
 const TESTNET_OBJECT_API_URL: &str = "https://object-api.n1.testnet.basin.storage";
-const DEVNET_OBJECT_API_URL: &str = "http://127.0.0.1:8001";
+const LOCALNET_OBJECT_API_URL: &str = "http://127.0.0.1:8001";
 
 /// Set current network to use testnet addresses.
 pub fn use_testnet_addresses() {
@@ -39,6 +40,8 @@ pub enum Network {
     Mainnet,
     /// Network presets for Calibration (default pre-mainnet).
     Testnet,
+    /// Network presets for a local three-node network.
+    Localnet,
     /// Network presets for local development.
     Devnet,
 }
@@ -49,6 +52,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(SubnetID::from_str(TESTNET_SUBNET_ID)?),
+            Network::Localnet => Ok(SubnetID::from_str(LOCALNET_SUBNET_ID)?),
             Network::Devnet => Ok(SubnetID::from_str(DEVNET_SUBNET_ID)?),
         }
     }
@@ -58,7 +62,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(Url::from_str(TESTNET_RPC_URL)?),
-            Network::Devnet => Ok(Url::from_str(DEVNET_RPC_URL)?),
+            Network::Localnet | Network::Devnet => Ok(Url::from_str(LOCALNET_RPC_URL)?),
         }
     }
 
@@ -67,7 +71,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(Url::from_str(TESTNET_OBJECT_API_URL)?),
-            Network::Devnet => Ok(Url::from_str(DEVNET_OBJECT_API_URL)?),
+            Network::Localnet | Network::Devnet => Ok(Url::from_str(LOCALNET_OBJECT_API_URL)?),
         }
     }
 
@@ -76,7 +80,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(reqwest::Url::from_str(TESTNET_EVM_RPC_URL)?),
-            Network::Devnet => Err(anyhow!("network has no parent")),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
     }
 
@@ -85,7 +89,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(parse_address(TESTNET_EVM_GATEWAY_ADDRESS)?),
-            Network::Devnet => Err(anyhow!("network has no parent")),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
     }
 
@@ -94,7 +98,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(parse_address(TESTNET_EVM_REGISTRY_ADDRESS)?),
-            Network::Devnet => Err(anyhow!("network has no parent")),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
     }
 
@@ -103,7 +107,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(reqwest::Url::from_str(TESTNET_PARENT_EVM_RPC_URL)?),
-            Network::Devnet => Err(anyhow!("network has no parent")),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
     }
 
@@ -112,7 +116,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(parse_address(TESTNET_PARENT_EVM_GATEWAY_ADDRESS)?),
-            Network::Devnet => Err(anyhow!("network has no parent")),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
     }
 
@@ -121,7 +125,7 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(parse_address(TESTNET_PARENT_EVM_REGISTRY_ADDRESS)?),
-            Network::Devnet => Err(anyhow!("network has no parent")),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
     }
 }
