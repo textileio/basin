@@ -116,24 +116,21 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
     let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
-        AccumulatorCommands::Create(AccumulatorCreateArgs {
-            private_key,
-            public_write,
-            tx_args,
-        }) => {
-            let TxParams {
-                sequence,
-                gas_params,
-            } = tx_args.to_tx_params();
-            let mut signer =
-                Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
-            signer.set_sequence(sequence, &provider).await?;
-
-            let write_access = if *public_write {
+        AccumulatorCommands::Create(args) => {
+            let write_access = if args.public_write {
                 WriteAccess::Public
             } else {
                 WriteAccess::OnlyOwner
             };
+            let TxParams {
+                sequence,
+                gas_params,
+            } = args.tx_args.to_tx_params();
+
+            let mut signer =
+                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+            signer.set_sequence(sequence, &provider).await?;
+
             let (store, tx) =
                 Accumulator::new(&provider, &mut signer, write_access, gas_params).await?;
 
@@ -150,29 +147,23 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
 
             print_json(&metadata)
         }
-        AccumulatorCommands::Push(AccumulatorPushArgs {
-            private_key,
-            address,
-            input,
-            broadcast_mode,
-            tx_args,
-        }) => {
+        AccumulatorCommands::Push(args) => {
+            let broadcast_mode = args.broadcast_mode.get();
             let TxParams {
                 gas_params,
                 sequence,
-            } = tx_args.to_tx_params();
+            } = args.tx_args.to_tx_params();
+
             let mut signer =
-                Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
             signer.set_sequence(sequence, &provider).await?;
 
-            let machine = Accumulator::attach(*address);
-
-            let mut reader = input.into_async_reader().await?;
+            let mut reader = args.input.into_async_reader().await?;
             let mut buf = Vec::new();
             reader.read_to_end(&mut buf).await?;
             let payload = Bytes::from(buf);
 
-            let broadcast_mode = broadcast_mode.get();
+            let machine = Accumulator::attach(args.address);
             let tx = machine
                 .push(&provider, &mut signer, payload, broadcast_mode, gas_params)
                 .await?;

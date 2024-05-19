@@ -20,7 +20,7 @@ use adm_provider::{
 };
 use adm_signer::Signer;
 
-use crate::machine::{deploy_machine, DeployTx, Machine};
+use crate::machine::{deploy_machine, DeployTxReceipt, Machine};
 
 const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 
@@ -54,7 +54,7 @@ impl Machine for Accumulator {
         signer: &mut impl Signer,
         write_access: WriteAccess,
         gas_params: GasParams,
-    ) -> anyhow::Result<(Self, DeployTx)>
+    ) -> anyhow::Result<(Self, DeployTxReceipt)>
     where
         C: Client + Send + Sync,
     {

@@ -1,8 +1,10 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::path::PathBuf;
+
+use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand};
-use clap_stdin::FileOrStdin;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_actor_objectstore::ObjectListItem;
 use fendermint_crypto::SecretKey;
@@ -10,19 +12,19 @@ use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
 use serde_json::{json, Value};
 use tendermint_rpc::Url;
+use tokio::fs::File;
 use tokio::io::{self};
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
-    object::ObjectClient,
     util::{parse_address, parse_query_height},
 };
+use adm_sdk::machine::objectstore::{AddOptions, DeleteOptions, GetOptions};
 use adm_sdk::{
     machine::{
-        objectstore::{ObjectStore, QueryParams},
+        objectstore::{ObjectStore, QueryOptions},
         Machine,
     },
-    progress_bar::ObjectProgressBar,
     TxParams,
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Void, Wallet};
@@ -84,8 +86,8 @@ struct ObjectstorePutArgs {
     #[arg(short, long)]
     overwrite: bool,
     /// Input file (or stdin) containing the object to upload.
-    #[clap(default_value = "-")]
-    input: FileOrStdin,
+    //#[clap(default_value = "-")]
+    input: PathBuf,
     /// Broadcast mode for the transaction.
     #[arg(short, long, value_enum, env, default_value_t = BroadcastMode::Commit)]
     broadcast_mode: BroadcastMode,
@@ -180,24 +182,21 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
     let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
-        ObjectstoreCommands::Create(ObjectstoreCreateArgs {
-            private_key,
-            public_write,
-            tx_args,
-        }) => {
-            let TxParams {
-                sequence,
-                gas_params,
-            } = tx_args.to_tx_params();
-            let mut signer =
-                Wallet::new_secp256k1(private_key.clone(), AccountKind::Ethereum, subnet_id)?;
-            signer.set_sequence(sequence, &provider).await?;
-
-            let write_access = if *public_write {
+        ObjectstoreCommands::Create(args) => {
+            let write_access = if args.public_write {
                 WriteAccess::Public
             } else {
                 WriteAccess::OnlyOwner
             };
+            let TxParams {
+                sequence,
+                gas_params,
+            } = args.tx_args.to_tx_params();
+
+            let mut signer =
+                Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
+            signer.set_sequence(sequence, &provider).await?;
+
             let (store, tx) =
                 ObjectStore::new(&provider, &mut signer, write_access, gas_params).await?;
 
@@ -214,119 +213,116 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
 
             print_json(&metadata)
         }
-        ObjectstoreCommands::Add(ObjectstorePutArgs {
-            private_key,
-            object_api_url,
-            key,
-            address,
-            overwrite,
-            input,
-            broadcast_mode,
-            tx_args,
-        }) => {
+        ObjectstoreCommands::Add(args) => {
+            let object_api_url = args
+                .object_api_url
+                .clone()
+                .unwrap_or(cli.network.get().object_api_url()?);
+            let broadcast_mode = args.broadcast_mode.get();
             let TxParams {
                 sequence,
                 gas_params,
-            } = tx_args.to_tx_params();
-            let broadcast_mode = broadcast_mode.get();
+            } = args.tx_args.to_tx_params();
+
             let mut signer = Wallet::new_secp256k1(
-                private_key.clone(),
+                args.private_key.clone(),
                 AccountKind::Ethereum,
                 subnet_id.clone(),
             )?;
             signer.set_sequence(sequence, &provider).await?;
 
-            let machine = ObjectStore::attach(*address);
-            let object_api_url = object_api_url
-                .clone()
-                .unwrap_or(cli.network.get().object_api_url()?);
-            let object_client = ObjectClient::new(object_api_url);
-            let upload_progress = ObjectProgressBar::new(cli.quiet);
+            let file = File::open(&args.input).await?;
+            let md = file.metadata().await?;
+            if !md.is_file() {
+                return Err(anyhow!("input must be a file"));
+            }
 
+            let machine = ObjectStore::attach(args.address);
             let tx = machine
                 .add(
                     &provider,
                     &mut signer,
-                    object_client,
-                    input.into_async_reader().await?,
-                    key,
-                    *overwrite,
-                    broadcast_mode,
-                    gas_params,
-                    Some(upload_progress),
+                    object_api_url,
+                    &args.key,
+                    file,
+                    AddOptions {
+                        overwrite: args.overwrite,
+                        broadcast_mode,
+                        gas_params,
+                        show_progress: !cli.quiet,
+                    },
                 )
                 .await?;
 
             print_json(&tx)
         }
-        ObjectstoreCommands::Delete(ObjectstoreDeleteArgs {
-            private_key,
-            key,
-            address,
-            broadcast_mode,
-            tx_args,
-        }) => {
+        ObjectstoreCommands::Delete(args) => {
+            let broadcast_mode = args.broadcast_mode.get();
             let TxParams {
                 sequence,
                 gas_params,
-            } = tx_args.to_tx_params();
-            let broadcast_mode = broadcast_mode.get();
+            } = args.tx_args.to_tx_params();
+
             let mut signer = Wallet::new_secp256k1(
-                private_key.clone(),
+                args.private_key.clone(),
                 AccountKind::Ethereum,
                 subnet_id.clone(),
             )?;
             signer.set_sequence(sequence, &provider).await?;
 
-            let machine = ObjectStore::attach(*address);
-
+            let machine = ObjectStore::attach(args.address);
             let tx = machine
-                .delete(&provider, &mut signer, key, broadcast_mode, gas_params)
+                .delete(
+                    &provider,
+                    &mut signer,
+                    &args.key,
+                    DeleteOptions {
+                        broadcast_mode,
+                        gas_params,
+                    },
+                )
                 .await?;
 
             print_json(&tx)
         }
         ObjectstoreCommands::Get(args) => {
-            let machine = ObjectStore::attach(args.address);
             let object_api_url = args
                 .object_api_url
                 .clone()
                 .unwrap_or(cli.network.get().object_api_url()?);
-            let object_client = ObjectClient::new(object_api_url);
-            let progress_bar = ObjectProgressBar::new(cli.quiet);
-            let stdout = io::stdout();
 
+            let machine = ObjectStore::attach(args.address);
             machine
                 .get(
                     &provider,
-                    object_client,
+                    object_api_url,
                     &args.key,
-                    args.range.clone(),
-                    args.height,
-                    stdout,
-                    Some(progress_bar),
+                    io::stdout(),
+                    GetOptions {
+                        range: args.range.clone(),
+                        height: args.height,
+                        show_progress: true,
+                    },
                 )
                 .await
         }
         ObjectstoreCommands::Query(args) => {
             let machine = ObjectStore::attach(args.address);
-
             let list = machine
                 .query(
                     &provider,
-                    QueryParams {
+                    QueryOptions {
                         prefix: args.prefix.clone(),
                         delimiter: args.delimiter.clone(),
                         offset: args.offset,
                         limit: args.limit,
+                        height: args.height,
                     },
-                    args.height,
                 )
                 .await?;
 
             // TODO: ObjectList doesn't need to return as an Option. We can change this in the actor.
             let list = list.unwrap_or_default();
-
             let objects = list
                 .objects
                 .iter()

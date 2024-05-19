@@ -30,14 +30,16 @@ pub trait ObjectService {
     ) -> anyhow::Result<UploadResponse>;
 
     /// Download an object from a node's Object API.
-    async fn download(
+    async fn download<W>(
         &self,
         address: Address,
         key: &str,
         range: Option<String>,
         height: u64,
-        writer: impl AsyncWrite + Unpin + Send + 'static,
-    ) -> anyhow::Result<()>;
+        writer: W,
+    ) -> anyhow::Result<()>
+    where
+        W: AsyncWrite + Unpin + Send + 'static;
 }
 
 /// An object service client capable of uploading and downloading objects.
@@ -81,19 +83,24 @@ impl ObjectService for ObjectClient {
                 response.text().await?
             )));
         }
+
         let cid_str = response.text().await?;
         let cid = Cid::try_from(cid_str)?;
+
         Ok(UploadResponse { cid })
     }
 
-    async fn download(
+    async fn download<W>(
         &self,
         address: Address,
         key: &str,
         range: Option<String>,
         height: u64,
-        mut writer: impl AsyncWrite + Unpin + Send + 'static,
-    ) -> anyhow::Result<()> {
+        mut writer: W,
+    ) -> anyhow::Result<()>
+    where
+        W: AsyncWrite + Unpin + Send + 'static,
+    {
         let url = format!(
             "{}v1/objectstores/{}/{}?height={}",
             self.endpoint, address, key, height

@@ -107,8 +107,8 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             let pk = sk.public_key().serialize();
             let address = Address::from(EthAddress::new_secp256k1(&pk)?);
             let eth_address = get_delegated_address(address)?;
-
             let sk_hex = hex::encode(sk.serialize());
+
             print_json(
                 &json!({"private_key": sk_hex, "address": eth_address, "fvm_address": address.to_string()}),
             )

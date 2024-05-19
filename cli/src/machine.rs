@@ -50,8 +50,8 @@ pub async fn handle_machine(cli: Cli, args: &MachineArgs) -> anyhow::Result<()> 
         MachineCommands::Info(args) => {
             let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
             let metadata = info(&provider, args.address, args.height).await?;
-
             let owner = get_delegated_address(metadata.owner)?.encode_hex_with_prefix();
+
             print_json(&json!({"kind": metadata.kind, "owner": owner}))
         }
     }

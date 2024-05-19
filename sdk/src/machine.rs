@@ -27,7 +27,7 @@ pub mod objectstore;
 
 /// Deployed machine transaction receipt details.
 #[derive(Copy, Clone, Debug, Serialize)]
-pub struct DeployTx {
+pub struct DeployTxReceipt {
     pub hash: Hash,
     pub height: Height,
     pub gas_used: i64,
@@ -48,7 +48,7 @@ pub trait Machine: Send + Sync + Sized {
         signer: &mut impl Signer,
         write_access: WriteAccess,
         gas_params: GasParams,
-    ) -> anyhow::Result<(Self, DeployTx)>
+    ) -> anyhow::Result<(Self, DeployTxReceipt)>
     where
         C: Client + Send + Sync;
 
@@ -102,7 +102,7 @@ async fn deploy_machine<C>(
     kind: Kind,
     write_access: WriteAccess,
     gas_params: GasParams,
-) -> anyhow::Result<(Address, DeployTx)>
+) -> anyhow::Result<(Address, DeployTxReceipt)>
 where
     C: Client + Send + Sync,
 {
@@ -131,7 +131,7 @@ where
 
     Ok((
         address,
-        DeployTx {
+        DeployTxReceipt {
             hash: tx.hash,
             height: tx.height.expect("height exists"),
             gas_used: tx.gas_used,
