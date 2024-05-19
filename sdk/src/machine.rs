@@ -5,7 +5,8 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use fendermint_actor_machine::{Metadata, WriteAccess, GET_METADATA_METHOD};
 use fendermint_vm_actor_interface::adm::{
-    CreateExternalParams, CreateExternalReturn, Kind, Method::CreateExternal, ADM_ACTOR_ADDR,
+    self, CreateExternalParams, CreateExternalReturn, Kind, ListMetadataParams,
+    Method::CreateExternal, Method::ListMetadata, ADM_ACTOR_ADDR,
 };
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::RawBytes;
@@ -36,6 +37,8 @@ pub struct DeployTx {
 /// This is modeled after Ethers contract deployment UX.
 #[async_trait]
 pub trait Machine: Send + Sync + Sized {
+    const KIND: Kind;
+
     /// Create a new machine instance using the given [`Provider`] and [`Signer`].
     ///
     /// [`WriteAccess::OnlyOwner`]: Only the owner will be able to mutate the machine.
@@ -49,6 +52,31 @@ pub trait Machine: Send + Sync + Sized {
     where
         C: Client + Send + Sync;
 
+    /// List machines owned by the given [`Signer`].
+    async fn list(
+        provider: &impl QueryProvider,
+        signer: &impl Signer,
+        height: FvmQueryHeight,
+    ) -> anyhow::Result<Vec<adm::Metadata>> {
+        let input = ListMetadataParams {
+            owner: signer.address(),
+        };
+        let params = RawBytes::serialize(input)?;
+        let message = local_message(ADM_ACTOR_ADDR, ListMetadata as u64, params);
+        let response = provider.call(message, height, decode_list).await?;
+
+        // Filtering "kind" on the client is a bit silly.
+        // Maybe we can add a filter on "kind" in the adm actor.
+        // TODO: Implement PartialEq on Kind to avoid the string comparison.
+        let list: Vec<adm::Metadata> = response
+            .value
+            .into_iter()
+            .filter(|m| m.kind.to_string() == Self::KIND.to_string())
+            .collect::<Vec<adm::Metadata>>();
+
+        Ok(list)
+    }
+
     /// Create a machine instance from an existing machine [`Address`].
     fn attach(address: Address) -> Self;
 
@@ -56,20 +84,15 @@ pub trait Machine: Send + Sync + Sized {
     fn address(&self) -> Address;
 }
 
-/// A static wrapper around any kind of machine.
-pub struct DefaultMachine {}
-
-impl DefaultMachine {
-    /// Get machine metadata (the owner and machine kind).
-    pub async fn metadata(
-        provider: &impl QueryProvider,
-        address: Address,
-        height: FvmQueryHeight,
-    ) -> anyhow::Result<Metadata> {
-        let message = local_message(address, GET_METADATA_METHOD, Default::default());
-        let response = provider.call(message, height, decode_metadata).await?;
-        Ok(response.value)
-    }
+/// Get machine info (the owner and machine kind).
+pub async fn info(
+    provider: &impl QueryProvider,
+    address: Address,
+    height: FvmQueryHeight,
+) -> anyhow::Result<Metadata> {
+    let message = local_message(address, GET_METADATA_METHOD, Default::default());
+    let response = provider.call(message, height, decode_info).await?;
+    Ok(response.value)
 }
 
 /// Deploys a machine.
@@ -116,14 +139,20 @@ where
     ))
 }
 
-fn decode_metadata(deliver_tx: &DeliverTx) -> anyhow::Result<Metadata> {
-    let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<Metadata>(&data)
-        .map_err(|e| anyhow!("error parsing as Metadata: {e}"))
-}
-
 fn decode_create(deliver_tx: &DeliverTx) -> anyhow::Result<CreateExternalReturn> {
     let data = decode_bytes(deliver_tx)?;
     fvm_ipld_encoding::from_slice::<CreateExternalReturn>(&data)
         .map_err(|e| anyhow!("error parsing as CreateExternalReturn: {e}"))
+}
+
+fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<Vec<adm::Metadata>> {
+    let data = decode_bytes(deliver_tx)?;
+    fvm_ipld_encoding::from_slice::<Vec<adm::Metadata>>(&data)
+        .map_err(|e| anyhow!("error parsing as Vec<adm::Metadata>: {e}"))
+}
+
+fn decode_info(deliver_tx: &DeliverTx) -> anyhow::Result<Metadata> {
+    let data = decode_bytes(deliver_tx)?;
+    fvm_ipld_encoding::from_slice::<Metadata>(&data)
+        .map_err(|e| anyhow!("error parsing as Metadata: {e}"))
 }

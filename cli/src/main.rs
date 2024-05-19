@@ -1,23 +1,32 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use fvm_shared::econ::TokenAmount;
+use clap::{error::ErrorKind, Args, CommandFactory, Parser, Subcommand, ValueEnum};
+use fendermint_crypto::SecretKey;
+use fendermint_vm_message::query::FvmQueryHeight;
+use fvm_shared::{address::Address, econ::TokenAmount};
 use serde::Serialize;
 use stderrlog::Timestamp;
 use tendermint_rpc::Url;
 
 use adm_provider::{
-    message::GasParams, util::parse_token_amount_from_atto, BroadcastMode as SDKBroadcastMode,
+    message::GasParams,
+    util::{parse_address, parse_query_height, parse_token_amount_from_atto},
+    BroadcastMode as SDKBroadcastMode,
 };
 use adm_sdk::{
     network::{use_testnet_addresses, Network as SdkNetwork},
     TxParams,
 };
-use adm_signer::SubnetID;
+use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Wallet};
 
 use crate::account::{handle_account, AccountArgs};
-use crate::machine::{handle_machine, MachineArgs};
+use crate::machine::{
+    accumulator::{handle_accumulator, AccumulatorArgs},
+    handle_machine,
+    objectstore::{handle_objectstore, ObjectstoreArgs},
+    MachineArgs,
+};
 
 mod account;
 mod machine;
@@ -53,6 +62,12 @@ enum Commands {
     /// Machine related commands.
     #[clap(alias = "machines")]
     Machine(MachineArgs),
+    /// Object store related commands (alias: os).
+    #[clap(alias = "os")]
+    Objectstore(ObjectstoreArgs),
+    /// Accumulator related commands (alias: ac).
+    #[clap(alias = "ac")]
+    Accumulator(AccumulatorArgs),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -61,6 +76,8 @@ enum Network {
     Mainnet,
     /// Network presets for Calibration (default pre-mainnet).
     Testnet,
+    /// Network presets for a local three-node network.
+    Localnet,
     /// Network presets for local development.
     Devnet,
 }
@@ -70,6 +87,7 @@ impl Network {
         match self {
             Network::Mainnet => SdkNetwork::Mainnet,
             Network::Testnet => SdkNetwork::Testnet,
+            Network::Localnet => SdkNetwork::Localnet,
             Network::Devnet => SdkNetwork::Devnet,
         }
     }
@@ -127,6 +145,23 @@ impl TxArgs {
     }
 }
 
+#[derive(Clone, Debug, Args)]
+struct AddressArgs {
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: Option<SecretKey>,
+    /// Account address. The signer address is used if no address is given.
+    #[arg(short, long, value_parser = parse_address)]
+    address: Option<Address>,
+    /// Query block height.
+    /// Possible values:
+    /// "committed" (latest committed block),
+    /// "pending" (consider pending state changes),
+    /// or a specific block height, e.g., "123".
+    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
+    height: FvmQueryHeight,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -140,19 +175,39 @@ async fn main() -> anyhow::Result<()> {
         .unwrap();
 
     match cli.network {
-        Network::Testnet | Network::Devnet => use_testnet_addresses(),
+        Network::Testnet | Network::Localnet | Network::Devnet => use_testnet_addresses(),
         _ => {}
     }
 
     match &cli.command.clone() {
         Commands::Account(args) => handle_account(cli, args).await,
+        Commands::Objectstore(args) => handle_objectstore(cli, args).await,
+        Commands::Accumulator(args) => handle_accumulator(cli, args).await,
         Commands::Machine(args) => handle_machine(cli, args).await,
     }
 }
 
+/// Returns address from private key or address arg.
+fn get_address(args: AddressArgs, subnet_id: &SubnetID) -> anyhow::Result<Address> {
+    let address = if let Some(addr) = args.address {
+        addr
+    } else if let Some(sk) = args.private_key.clone() {
+        let signer = Wallet::new_secp256k1(sk, AccountKind::Ethereum, subnet_id.clone())?;
+        signer.address()
+    } else {
+        Cli::command()
+            .error(
+                ErrorKind::MissingRequiredArgument,
+                "the following required arguments were not provided: --private-key OR --address",
+            )
+            .exit();
+    };
+    Ok(address)
+}
+
 /// Returns subnet ID from the override or network preset.
 fn get_subnet_id(cli: &Cli) -> anyhow::Result<SubnetID> {
-    Ok(cli.subnet.clone().unwrap_or(cli.network.get().subnet()?))
+    Ok(cli.subnet.clone().unwrap_or(cli.network.get().subnet_id()?))
 }
 
 /// Returns rpc url from the override or network preset.

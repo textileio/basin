@@ -1,24 +1,23 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use clap::{error::ErrorKind, Args, CommandFactory, Subcommand};
+use clap::{Args, Subcommand};
 use fendermint_crypto::SecretKey;
 use fendermint_vm_actor_interface::eam::EthAddress;
-use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::{address::Address, econ::TokenAmount};
 use reqwest::Url;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::time::Duration;
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
-    util::{get_delegated_address, parse_address, parse_query_height, parse_token_amount},
+    util::{get_delegated_address, parse_address, parse_token_amount},
 };
 use adm_sdk::{account::Account, ipc::subnet::EVMSubnet};
 use adm_signer::key::random_secretkey;
 use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Void, Wallet};
 
-use crate::{get_rpc_url, get_subnet_id, print_json, Cli};
+use crate::{get_address, get_rpc_url, get_subnet_id, print_json, AddressArgs, Cli};
 
 #[derive(Clone, Debug, Args)]
 pub struct AccountArgs {
@@ -30,37 +29,14 @@ pub struct AccountArgs {
 enum AccountCommands {
     /// Create a new account from a random seed.
     Create,
-    /// Get account address information.
-    Address(AddressArgs),
-    /// List machines by owner in a subnet.
-    Machines(AddressArgs),
-    /// Get account sequence in a subnet.
-    Sequence(AddressArgs),
-    /// Get account balance in a subnet.
-    Balance(BalanceArgs),
+    /// Get account information.
+    Info(InfoArgs),
     /// Deposit funds into a subnet from its parent.
     Deposit(FundArgs),
     /// Withdraw funds from a subnet to its parent.
     Withdraw(FundArgs),
     /// Transfer funds to another account in a subnet.
     Transfer(TransferArgs),
-}
-
-#[derive(Clone, Debug, Args)]
-struct AddressArgs {
-    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
-    #[arg(short, long, env, value_parser = parse_secret_key)]
-    private_key: Option<SecretKey>,
-    /// Owner address. The signer address is used if no address is given.
-    #[arg(short, long, value_parser = parse_address)]
-    address: Option<Address>,
-    /// Query block height.
-    /// Possible values:
-    /// "committed" (latest committed block),
-    /// "pending" (consider pending state changes),
-    /// or a specific block height, e.g., "123".
-    #[arg(long, value_parser = parse_query_height, default_value = "committed")]
-    height: FvmQueryHeight,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -83,10 +59,7 @@ struct SubnetArgs {
 }
 
 #[derive(Clone, Debug, Args)]
-struct BalanceArgs {
-    /// The Ethereum API rpc http endpoint.
-    #[arg(long, default_value_t = false)]
-    parent: bool,
+struct InfoArgs {
     #[command(flatten)]
     address: AddressArgs,
     #[command(flatten)]
@@ -140,39 +113,25 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
                 &json!({"private_key": sk_hex, "address": eth_address, "fvm_address": address.to_string()}),
             )
         }
-        AccountCommands::Address(args) => {
-            let address = get_address(args.clone(), &subnet_id)?;
-            let eth_address = get_delegated_address(address)?;
-
-            print_json(&json!({"address": eth_address, "fvm_address": address.to_string()}))
-        }
-        AccountCommands::Machines(args) => {
-            let address = get_address(args.clone(), &subnet_id)?;
-            let metadata = Account::machines(&provider, &Void::new(address), args.height).await?;
-
-            let metadata = metadata
-                .iter()
-                .map(|m| json!({"address": m.address.to_string(), "kind": m.kind}))
-                .collect::<Vec<Value>>();
-
-            print_json(&metadata)
-        }
-        AccountCommands::Sequence(args) => {
-            let address = get_address(args.clone(), &subnet_id)?;
-            let sequence = Account::sequence(&provider, &Void::new(address), args.height).await?;
-
-            print_json(&json!({"sequence": sequence}))
-        }
-        AccountCommands::Balance(args) => {
+        AccountCommands::Info(args) => {
             let address = get_address(args.address.clone(), &subnet_id)?;
-            let config = if args.parent {
-                get_parent_subnet_config(&cli, &subnet_id, args.subnet.clone())?
-            } else {
-                get_subnet_config(&cli, &subnet_id, args.subnet.clone())?
-            };
-            let balance = Account::balance(&Void::new(address), config).await?;
+            let eth_address = get_delegated_address(address)?;
+            let sequence =
+                Account::sequence(&provider, &Void::new(address), args.address.height).await?;
+            let balance = Account::balance(
+                &Void::new(address),
+                get_subnet_config(&cli, &subnet_id, args.subnet.clone())?,
+            )
+            .await?;
+            let parent_balance = Account::balance(
+                &Void::new(address),
+                get_parent_subnet_config(&cli, &subnet_id, args.subnet.clone())?,
+            )
+            .await?;
 
-            print_json(&json!({"balance": balance.to_string()}))
+            print_json(
+                &json!({"address": eth_address, "fvm_address": address.to_string(), "sequence": sequence, "balance": balance.to_string(), "parent_balance": parent_balance.to_string()}),
+            )
         }
         AccountCommands::Deposit(args) => {
             let config = get_parent_subnet_config(&cli, &subnet_id, args.subnet.clone())?;
@@ -220,24 +179,6 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             print_json(&tx)
         }
     }
-}
-
-/// Returns address from private key or address arg.
-fn get_address(args: AddressArgs, subnet_id: &SubnetID) -> anyhow::Result<Address> {
-    let address = if let Some(addr) = args.address {
-        addr
-    } else if let Some(sk) = args.private_key.clone() {
-        let signer = Wallet::new_secp256k1(sk, AccountKind::Ethereum, subnet_id.clone())?;
-        signer.address()
-    } else {
-        Cli::command()
-            .error(
-                ErrorKind::MissingRequiredArgument,
-                "the following required arguments were not provided: --private-key OR --address",
-            )
-            .exit();
-    };
-    Ok(address)
 }
 
 /// Returns the subnet configuration from args.

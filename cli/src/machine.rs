@@ -11,12 +11,8 @@ use adm_provider::{
     json_rpc::JsonRpcProvider,
     util::{get_delegated_address, parse_address, parse_query_height},
 };
-use adm_sdk::machine::DefaultMachine;
+use adm_sdk::machine::info;
 
-use crate::machine::{
-    accumulator::{handle_accumulator, AccumulatorArgs},
-    objectstore::{handle_objectstore, ObjectstoreArgs},
-};
 use crate::{get_rpc_url, print_json, Cli};
 
 pub mod accumulator;
@@ -31,15 +27,11 @@ pub struct MachineArgs {
 #[derive(Clone, Debug, Subcommand)]
 enum MachineCommands {
     /// Get machine info.
-    Get(GetMachineArgs),
-    /// Object store related commands.
-    Objectstore(ObjectstoreArgs),
-    /// Accumulator related commands.
-    Accumulator(AccumulatorArgs),
+    Info(InfoArgs),
 }
 
 #[derive(Clone, Debug, Args)]
-struct GetMachineArgs {
+struct InfoArgs {
     /// Machine address.
     #[arg(value_parser = parse_address)]
     address: Address,
@@ -55,14 +47,12 @@ struct GetMachineArgs {
 /// Machine commmands handler.
 pub async fn handle_machine(cli: Cli, args: &MachineArgs) -> anyhow::Result<()> {
     match &args.command {
-        MachineCommands::Get(args) => {
+        MachineCommands::Info(args) => {
             let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
-            let metadata = DefaultMachine::metadata(&provider, args.address, args.height).await?;
+            let metadata = info(&provider, args.address, args.height).await?;
 
             let owner = get_delegated_address(metadata.owner)?.encode_hex_with_prefix();
             print_json(&json!({"kind": metadata.kind, "owner": owner}))
         }
-        MachineCommands::Objectstore(args) => handle_objectstore(cli, args).await,
-        MachineCommands::Accumulator(args) => handle_accumulator(cli, args).await,
     }
 }
