@@ -29,7 +29,8 @@ async fn main() -> anyhow::Result<()> {
     let network = Network::Testnet;
 
     // Setup network provider
-    let provider = JsonRpcProvider::new_http(network.rpc_url()?, None)?;
+    let provider =
+        JsonRpcProvider::new_http(network.rpc_url()?, None, Some(network.object_api_url()?))?;
 
     // Setup local wallet using private key from arg
     let mut signer = Wallet::new_secp256k1(pk, AccountKind::Ethereum, network.subnet_id()?)?;
@@ -58,14 +59,7 @@ async fn main() -> anyhow::Result<()> {
     // Add a file to the object store
     let key = "foo/my_file";
     let tx = machine
-        .add(
-            &provider,
-            &mut signer,
-            network.object_api_url()?,
-            key,
-            file,
-            Default::default(),
-        )
+        .add(&provider, &mut signer, key, file, Default::default())
         .await?;
     println!(
         "Added 1MiB file to object store {} with key {}; Transaction hash: {}",

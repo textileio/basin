@@ -16,7 +16,10 @@ use adm_provider::{
     util::{parse_address, parse_query_height},
 };
 use adm_sdk::{
-    machine::{accumulator::Accumulator, Machine},
+    machine::{
+        accumulator::{Accumulator, PushOptions},
+        Machine,
+    },
     TxParams,
 };
 use adm_signer::{key::parse_secret_key, AccountKind, Void, Wallet};
@@ -112,7 +115,7 @@ struct AccumulatorLeafArgs {
 
 /// Accumulator commmands handler.
 pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Result<()> {
-    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
+    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
     let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
@@ -165,7 +168,15 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
 
             let machine = Accumulator::attach(args.address);
             let tx = machine
-                .push(&provider, &mut signer, payload, broadcast_mode, gas_params)
+                .push(
+                    &provider,
+                    &mut signer,
+                    payload,
+                    PushOptions {
+                        broadcast_mode,
+                        gas_params,
+                    },
+                )
                 .await?;
 
             print_json(&tx)

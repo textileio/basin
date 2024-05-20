@@ -6,7 +6,7 @@ use ethers::prelude::TransactionReceipt;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::{address::Address, econ::TokenAmount};
 
-use adm_provider::QueryProvider;
+use adm_provider::query::QueryProvider;
 use adm_signer::Signer;
 
 use crate::ipc::{manager::EvmManager, subnet::EVMSubnet};

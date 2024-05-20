@@ -8,7 +8,7 @@ use bytes::Bytes;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_vm_message::query::FvmQueryHeight;
 
-use adm_provider::{json_rpc::JsonRpcProvider, BroadcastMode};
+use adm_provider::json_rpc::JsonRpcProvider;
 use adm_sdk::{
     machine::{accumulator::Accumulator, Machine},
     network::Network,
@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     let network = Network::Testnet;
 
     // Setup network provider
-    let provider = JsonRpcProvider::new_http(network.rpc_url()?, None)?;
+    let provider = JsonRpcProvider::new_http(network.rpc_url()?, None, None)?;
 
     // Setup local wallet using private key from arg
     let mut signer = Wallet::new_secp256k1(pk, AccountKind::Ethereum, network.subnet_id()?)?;
@@ -51,13 +51,7 @@ async fn main() -> anyhow::Result<()> {
     // Push a payload to the accumulator
     let payload = Bytes::from("my_payload");
     let tx = machine
-        .push(
-            &provider,
-            &mut signer,
-            payload,
-            BroadcastMode::Commit,
-            Default::default(),
-        )
+        .push(&provider, &mut signer, payload, Default::default())
         .await?;
     println!(
         "Pushed payload to accumulator {}; Transaction hash: {}",

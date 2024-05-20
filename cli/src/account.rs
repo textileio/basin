@@ -98,7 +98,7 @@ struct TransferArgs {
 
 /// Account commmands handler.
 pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> {
-    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
+    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
     let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {

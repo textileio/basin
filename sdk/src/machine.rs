@@ -17,8 +17,10 @@ use tendermint_rpc::Client;
 
 use adm_provider::{
     message::{local_message, GasParams},
+    query::QueryProvider,
     response::decode_bytes,
-    BroadcastMode, Provider, QueryProvider,
+    tx::BroadcastMode,
+    Provider,
 };
 use adm_signer::Signer;
 

@@ -11,8 +11,8 @@ use tendermint_rpc::Url;
 
 use adm_provider::{
     message::GasParams,
+    tx::BroadcastMode as SDKBroadcastMode,
     util::{parse_address, parse_query_height, parse_token_amount_from_atto},
-    BroadcastMode as SDKBroadcastMode,
 };
 use adm_sdk::{
     network::{use_testnet_addresses, Network as SdkNetwork},

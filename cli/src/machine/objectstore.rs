@@ -178,11 +178,12 @@ struct ObjectstoreQueryArgs {
 
 /// Objectstore commmands handler.
 pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Result<()> {
-    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
     let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
         ObjectstoreCommands::Create(args) => {
+            let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
+
             let write_access = if args.public_write {
                 WriteAccess::Public
             } else {
@@ -203,6 +204,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
         ObjectstoreCommands::List(args) => {
+            let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
+
             let address = get_address(args.clone(), &subnet_id)?;
             let metadata = ObjectStore::list(&provider, &Void::new(address), args.height).await?;
 
@@ -218,6 +221,9 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .object_api_url
                 .clone()
                 .unwrap_or(cli.network.get().object_api_url()?);
+            let provider =
+                JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, Some(object_api_url))?;
+
             let broadcast_mode = args.broadcast_mode.get();
             let TxParams {
                 sequence,
@@ -242,7 +248,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .add(
                     &provider,
                     &mut signer,
-                    object_api_url,
                     &args.key,
                     file,
                     AddOptions {
@@ -257,6 +262,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             print_json(&tx)
         }
         ObjectstoreCommands::Delete(args) => {
+            let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
+
             let broadcast_mode = args.broadcast_mode.get();
             let TxParams {
                 sequence,
@@ -290,12 +297,13 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .object_api_url
                 .clone()
                 .unwrap_or(cli.network.get().object_api_url()?);
+            let provider =
+                JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, Some(object_api_url))?;
 
             let machine = ObjectStore::attach(args.address);
             machine
                 .get(
                     &provider,
-                    object_api_url,
                     &args.key,
                     io::stdout(),
                     GetOptions {
@@ -307,6 +315,8 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .await
         }
         ObjectstoreCommands::Query(args) => {
+            let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
+
             let machine = ObjectStore::attach(args.address);
             let list = machine
                 .query(

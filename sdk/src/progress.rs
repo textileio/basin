@@ -13,14 +13,20 @@ pub(crate) static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", ":-)");
 
 lazy_static! {
     static ref SPINNER_STYLE: ProgressStyle =
-        ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+        ProgressStyle::with_template("{prefix:.bold.dim} {spinner:.green} {wide_msg}")
             .unwrap()
-            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-
-    static ref PROGRESS_STYLE: ProgressStyle = ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .unwrap()
-            .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
-            .progress_chars("#>-");
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
+    static ref PROGRESS_STYLE: ProgressStyle = ProgressStyle::with_template(
+        "[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})"
+    )
+    .unwrap()
+    .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(
+        w,
+        "{:.1}s",
+        state.eta().as_secs_f64()
+    )
+    .unwrap())
+    .progress_chars("#>-");
 }
 
 /// Create a new progress bar. Use `hide` to hide all child bars.
@@ -43,13 +49,6 @@ pub(crate) fn new_progress_bar(size: usize) -> ProgressBar {
 pub(crate) fn new_message_bar() -> ProgressBar {
     let pb = ProgressBar::new(0);
     pb.set_style(SPINNER_STYLE.clone());
-    pb.enable_steady_tick(Duration::from_millis(20));
+    pb.enable_steady_tick(Duration::from_millis(80));
     pb
 }
-
-// /// Show downloaded object [`Cid`].
-// pub fn show_downloaded(&self, cid: Cid) {
-//     if let Some(bar) = &self.inner {
-//         bar.println(format!("{}  Downloaded object {}", Emoji("✅", ""), cid,));
-//     }
-// }

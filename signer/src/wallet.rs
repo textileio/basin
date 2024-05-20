@@ -15,7 +15,7 @@ use fvm_shared::{
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use adm_provider::{message::GasParams, QueryProvider};
+use adm_provider::{message::GasParams, query::QueryProvider};
 
 use crate::signer::Signer;
 use crate::SubnetID;

@@ -15,8 +15,11 @@ use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 
 use adm_provider::{
-    message::local_message, message::GasParams, response::decode_bytes, response::decode_cid,
-    response::Cid, BroadcastMode, Provider, QueryProvider, TxReceipt,
+    message::{local_message, GasParams},
+    query::QueryProvider,
+    response::{decode_bytes, decode_cid, Cid},
+    tx::{BroadcastMode, TxReceipt},
+    Provider,
 };
 use adm_signer::Signer;
 
@@ -24,10 +27,21 @@ use crate::machine::{deploy_machine, DeployTxReceipt, Machine};
 
 const MAX_ACC_PAYLOAD_SIZE: usize = 1024 * 500;
 
+/// Payload push options.
+#[derive(Clone, Default, Debug)]
+pub struct PushOptions {
+    /// Broadcast mode for the transaction.
+    pub broadcast_mode: BroadcastMode,
+    /// Gas params for the transaction.
+    pub gas_params: GasParams,
+}
+
 /// JSON serialization friendly version of [`fendermint_actor_accumulator::PushReturn`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PushReturn {
+    /// The new accumulator root.
     pub root: Cid,
+    /// The index of the newly pushed value.
     pub index: u64,
 }
 
@@ -85,8 +99,7 @@ impl Accumulator {
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         payload: Bytes,
-        broadcast_mode: BroadcastMode,
-        gas_params: GasParams,
+        options: PushOptions,
     ) -> anyhow::Result<TxReceipt<PushReturn>>
     where
         C: Client + Send + Sync,
@@ -106,11 +119,11 @@ impl Accumulator {
                 Push as u64,
                 params,
                 None,
-                gas_params,
+                options.gas_params,
             )
             .await?;
         provider
-            .perform(message, broadcast_mode, decode_push_return)
+            .perform(message, options.broadcast_mode, decode_push_return)
             .await
     }
 
