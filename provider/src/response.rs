@@ -32,7 +32,8 @@ pub(crate) fn decode_data(data: &Bytes) -> anyhow::Result<RawBytes> {
 
 /// Parse what Tendermint returns in the `data` field of [`DeliverTx`] as raw bytes.
 ///
-/// Only call this after the `code` of both [`DeliverTx`] and [`CheckTx`] have been inspected!
+/// Only call this after the `code` of both [`DeliverTx`] and
+/// [`tendermint::abci::response::CheckTx`] have been inspected!
 pub fn decode_bytes(deliver_tx: &DeliverTx) -> anyhow::Result<RawBytes> {
     decode_data(&deliver_tx.data)
 }

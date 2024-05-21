@@ -65,7 +65,7 @@ Balance of 0x9c094a4a1376d24cb83667567dec2d6b2ba4944e: 1.0
 
 ### Object storage
 
-[`objectstore_add.rs`](objectstore_add.rs) create a new object store, adds an object, and then queries for it by key.
+[`objectstore_add.rs`](objectstore_add.rs) creates a new object store, adds an object, and then queries for it by key.
 To run this example, you must deposit some funds into the `adm` testnet subnet.
 
 ```shell
@@ -86,7 +86,7 @@ See the docs for more object store methods.
 
 ### Accumulators
 
-[`accumulator_push.rs`](accumulator_push.rs) create a new accumulator for state updates, pushes a new value,
+[`accumulator_push.rs`](accumulator_push.rs) creates a new accumulator for state updates, pushes a new value,
 gets it back, and then qeuries for the accumulator's count and state root.
 To run this example, you must deposit some funds into the `adm` testnet subnet.
 

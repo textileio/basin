@@ -113,8 +113,8 @@ modes are also possible.
 
 ### Global options
 
-All the global flags can also be passed as all-caps, snake case environment variables (
-e.g., `--rpc-url` => `RPC_URL`) that are set and sourced in a `.env` file.
+All the global flags can also be passed as all-caps, snake case environment variables
+(e.g., `--rpc-url` => `RPC_URL`) that are set and sourced in a `.env` file.
 
 | Flag              | Description                                                                                |
 |-------------------|--------------------------------------------------------------------------------------------|
@@ -228,8 +228,8 @@ adm account sequence {--private-key <PRIVATE_KEY> | --address <ADDRESS>}
 You must pass _either_ the `--private-key` or `--address` flag. An address must be in the delegated `t410` or `0x`
 format.
 
-- `adm account sequence --private-key <PRIVATE_KEY>`: Query with a private key (e.g., read from your `.env` file). (
-  e.g., read from your `.env` file).
+- `adm account sequence --private-key <PRIVATE_KEY>`: Query with a private key (e.g., read from your `.env` file).
+  (e.g., read from your `.env` file).
 - `adm account sequence --address <ADDRESS>`: Query a `t410` or `0x` address.
 
 | Flag                | Required?                | Description                                                           |
@@ -563,7 +563,7 @@ The `objectstore` subcommand has the following subcommands:
 When you create objects, the `key` is a custom identifier that, by default, uses the `/` delimiter to create a key-based
 hierarchy. The value is the data you want to store, which can be a file path or piped from stdin. A best practice is to
 decide on a key naming convention that makes sense for your data, such as `<namespace>/<id>` or similar. The
-hierarchical structure of the key allows for easy retrieval of data by prefixes, explained in more detail below (see
+hierarchical structure of the key allows for easy retrieval of data by prefixes, which is explained below (see
 the `query` subcommand).
 
 #### Create
