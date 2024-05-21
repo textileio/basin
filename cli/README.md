@@ -44,11 +44,19 @@
 
 ## Background
 
-The ADM CLI comes packed with account management and machine control for scalable data storage. You can create an object
-store and accumulator machine, push data to them, and retrieve the data (or relevant information about it). The object
-store machine is a key-value store that allows you to spin up new stores, push, and retrieve data. Plus, features like
-range requests and other filters add convenience its usage. The accumulator machine is a hashed structure that allows
-you to push data to it and retrieve the root, leaf, or count of the tree; a verifiable anchoring system.
+The ADM CLI is a tool for managing your account and data machines.
+
+- _Object store machines_:
+  These are key-value stores that allow you to push and retrieve data in a familiar S3-like fashion.
+  Object stores support byte range requests and advanced queries based on key prefix, delimiter, offset, and
+  limit.
+- _Accumulator machines_:
+  An accumulator is a [Merkle Mountain Range (MMR)](https://docs.grin.mw/wiki/chain-state/merkle-mountain-range/)-based
+  verifiable anchoring system for state updates.
+  You can push values up to 500KiB and retrieve them by index.
+  Accumulators support querying for state root, MMR peaks, and total leaf count.
+
+Read more about data machines [here](../README.md).
 
 ### Prerequisites
 

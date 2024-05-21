@@ -15,24 +15,35 @@
 
 ## Background
 
-The ADM SDK comes packed with account management and machine control for scalable data storage.
-You can create an object store and accumulator machine, push data to them, and retrieve the data (or relevant
-information about it).
-The object store machine is a key-value store that allows you to spin up new stores, push, and retrieve data.
-Plus, features like range requests and other filters add convenience its usage.
-The accumulator machine is a hashed structure that allows
-you to push data to it and retrieve the root, leaf, or count of the tree; a verifiable anchoring system.
+The ADM CLI is a tool for managing your account and data machines.
+
+- _Object store machines_:
+  These are key-value stores that allow you to push and retrieve data in a familiar S3-like fashion.
+  Object stores support byte range requests and advanced queries based on key prefix, delimiter, offset, and
+  limit.
+- _Accumulator machines_:
+  An accumulator is a [Merkle Mountain Range (MMR)](https://docs.grin.mw/wiki/chain-state/merkle-mountain-range/)-based
+  verifiable anchoring system for state updates.
+  You can push values up to 500KiB and retrieve them by index.
+  Accumulators support querying for state root, MMR peaks, and total leaf count.
+
+Read more about data machines [here](../README.md).
 
 The SDK consists of the following crates:
 
 - [`adm_provider`](../provider): A chain and object provider for the ADM.
-  Read the docs [here](https://crates.io/crates/adm_provider).
 - [`adm_signer`](../signer): A transaction signer for the ADM.
   This crate has a built-in [wallet](../signer/src/wallet.rs) signer implementation that relies on a local private key
   to sign messages.
-  Read the docs [here](https://crates.io/crates/adm_signer).
 - [`adm_sdk`](.): The top-level user interface for managing ADM object storage and state accumulators.
-  Read the docs [here](https://crates.io/crates/adm_sdk).
+
+The `adm` crates haven't been published yet, but you can read the Cargo docs by building them locally from the repo
+root.
+
+```shell
+# Build cargo docs and open in your default browser
+make doc
+```
 
 ### Prerequisites
 
@@ -43,14 +54,17 @@ the [`account_deposit.rs`](./examples/account_deposit.rs) example to create a pr
 
 Then, make sure your account is funded with FIL, so you can pay to execute a transaction (you can use the
 faucet [here](https://faucet.calibnet.chainsafe-fil.io/funds.html)).
-When you `deposit` funds from the parent (Filecoin Calibration) to the child subnet,
-it will register your account on the subnet.
-If you ever want to move funds back to the parent, the `withdraw` command can be used.
-Note these differ from moving funds intra-subnet, which requires you to use the `transfer` command.
+Follow the [examples](./examples) to get up and running.
 
 ## Usage
 
-See [examples](./examples).
+Checkout the SDK [examples](./examples).
+The `adm` crates haven't been published yet, but you can use `adm_sdk` as a git dependencies.
+
+```toml
+[dependencies]
+adm_sdk = { git = "https://github.com/textileio/basin.git" }
+```
 
 > [!NOTE]
 > To use this crate in another crate, include this patch
@@ -61,7 +75,7 @@ See [examples](./examples).
 > merkle-tree-rs = { git = "https://github.com/consensus-shipyard/merkle-tree-rs.git", branch = "dev" }
 > ```
 
-The next SDK release will fix this issue.
+This issue will be fixed when the `adm` crates get published soon.
 
 ## Contributing
 
