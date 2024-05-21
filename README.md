@@ -48,7 +48,9 @@ The ADM is developed using the Filecoin [InterPlanetary Consensus (IPC) framewor
 new blockchain scaling solution and architectural design that is an alternative to existing L2 scaling solutions and
 based on the design principles of on-demand horizontal scaling.
 
-![Basin Architecture](./img/architecture.png "Basin Architecture")
+<p align="center">
+  <img src="./img/architecture.png" alt="Basin Architecture" width="500">
+</p>
 
 #### IPC & subnets
 
