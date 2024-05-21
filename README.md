@@ -48,6 +48,8 @@ The ADM is developed using the Filecoin [InterPlanetary Consensus (IPC) framewor
 new blockchain scaling solution and architectural design that is an alternative to existing L2 scaling solutions and
 based on the design principles of on-demand horizontal scaling.
 
+![Basin Architecture](./img/architecture.png "Basin Architecture")
+
 #### IPC & subnets
 
 IPC allows for permissionless creation of new blockchain subsystems called _subnets_. Subnets are organized
@@ -101,7 +103,7 @@ internal state so that it is IPLD addressable. There is also a "topdown" sync ac
 parent's finality, which includes the latest block hash, power table information, and (in the future) cross-subnet
 message passing.
 
-In general, data are represented as CIDs onchain (within an ADM machine's state), and the actual data is stored offchain
+In general, data is represented as CIDs onchain (within an ADM machine's state), and the actual data is stored offchain
 in a node's local (networked) block store. The ADM uses the concept of a _detached payload_ asynchronous sync mechanism,
 which is a transaction that includes a CID reference to an object, but does not include the object data itself. When a
 detached payload is added to the chain, validators are required to download the object data from the network and verify
@@ -109,8 +111,8 @@ that it matches the CID reference. This ensures that all validators have a copy 
 integrity of the object store state.
 
 The core IPC process for topdown parent finality is a vote-based mechanism. Once a validator has the data locally (via
-synchronization with its peers), the validator issues a _vote_ to the other validators to confirm data availability (
-this is similar to Ethereum's concept of
+synchronization with its peers), the validator issues a _vote_ to the other validators to confirm data availability
+(this is similar to Ethereum's concept of
 a [data availability committee](https://ethereum.org/en/developers/docs/data-availability/#data-availability-committees)).
 During this time, normal block production continues. The leader of a given consensus round checks the vote tally for
 quorum based on the power table (stake) within the subnet. If a quorum is reached, the leader injects a synthetic
@@ -180,10 +182,10 @@ be used interchangeably on Filecoin and all ADM subnets.
 ### Access control
 
 Currently, there are two types of write access controls: only-owner, or public access. For example, you can create an
-object store that you and _only_ you can write to—gated by signatures from your private key. Or, you can have "allow
+object store that you, and _only_ you can write to—gated by signatures from your private key. Or, you can have "allow
 all" access where anyone can write data.
 
-This is being further refined, and there will more robust access control mechanisms in the future.
+This is being further refined, and there will be more robust access control mechanisms in the future.
 
 ### Broadcast modes
 

@@ -23,6 +23,17 @@ Plus, features like range requests and other filters add convenience its usage.
 The accumulator machine is a hashed structure that allows
 you to push data to it and retrieve the root, leaf, or count of the tree; a verifiable anchoring system.
 
+The SDK consists of the following crates:
+
+- [`adm_provider`](../provider): A chain and object provider for the ADM.
+  Read the docs [here](https://crates.io/crates/adm_provider).
+- [`adm_signer`](../signer): A transaction signer for the ADM.
+  This crate has a built-in [wallet](../signer/src/wallet.rs) signer implementation that relies on a local private key
+  to sign messages.
+  Read the docs [here](https://crates.io/crates/adm_signer).
+- [`adm_sdk`](.): The top-level user interface for managing ADM object storage and state accumulators.
+  Read the docs [here](https://crates.io/crates/adm_sdk).
+
 ### Prerequisites
 
 All data is signed onchain as transactions, so you'll need to set up an account (ECDSA, secp256k1) to use the ADM

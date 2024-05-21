@@ -76,7 +76,7 @@ pub struct GetOptions {
     /// Format: "start-end" (inclusive).
     /// Example: "0-99" (first 100 bytes).
     /// This follows the HTTP range header format:
-    /// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range
+    /// `<https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range>`
     pub range: Option<String>,
     /// Query block height.
     pub height: FvmQueryHeight,
@@ -275,7 +275,9 @@ impl ObjectStore {
                 .await?;
 
             // Verify uploaded CID with locally computed CID
-            assert_eq!(response_cid, object_cid);
+            if response_cid != object_cid {
+                return Err(anyhow!("cannot verify object; cid does not match remote"));
+            }
 
             // Broadcast transaction with Object's CID
             msg_bar.set_prefix("[3/3]");

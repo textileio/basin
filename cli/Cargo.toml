@@ -1,6 +1,6 @@
 [package]
 name = "adm_cli"
-description = "A CLI for interacting with the Amazing Data Machine (ADM)."
+description = "A command line interface (CLI) for the ADM."
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true

@@ -1,6 +1,10 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+//! # ADM SDK
+//!
+//! The top-level user interface for managing ADM object storage and state accumulators.
+
 use adm_provider::message::GasParams;
 
 pub mod account;
