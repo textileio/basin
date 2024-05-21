@@ -214,6 +214,7 @@ impl ObjectStore {
             let mut object_size: usize = 0;
 
             msg_bar.set_prefix("[1/3]");
+            let mut chunk = Cid::from(cid::Cid::default());
             loop {
                 match reader.read(&mut buffer).await {
                     Ok(0) => {
@@ -222,8 +223,9 @@ impl ObjectStore {
                     Ok(n) => {
                         reader_size += n;
                         let (leaf, n) = adder.push(&buffer[..n]);
-                        for (_, (chunk_cid, _)) in leaf.enumerate() {
-                            msg_bar.set_message(format!("Processed chunk: {}", chunk_cid));
+                        for (c, _) in leaf {
+                            chunk = Cid::from(cid::Cid::try_from(c.to_bytes())?);
+                            msg_bar.set_message(format!("Processed chunk: {}", c));
                         }
                         object_size += n;
                     }
@@ -233,10 +235,13 @@ impl ObjectStore {
                 }
             }
             let unixfs_iterator = adder.finish();
-            let (cid, _) = unixfs_iterator
-                .last()
-                .ok_or_else(|| anyhow!("failed to get root cid"))?;
-            let object_cid = Cid::from(cid::Cid::try_from(cid.to_bytes())?);
+            // Turns out if input is equal to chunk size, the iterator will be empty,
+            // and the object cid will be equal to the first processed chunk ¯\_(ツ)_/¯
+            let last = unixfs_iterator.last();
+            let object_cid = match last {
+                Some((c, _)) => Cid::from(cid::Cid::try_from(c.to_bytes())?),
+                None => chunk,
+            };
 
             // Rewind and stream for uploading
             msg_bar.set_prefix("[2/3]");
@@ -248,7 +253,7 @@ impl ObjectStore {
                 let mut progress: usize = 0;
                 while let Some(chunk) = stream.next().await {
                     if let Ok(chunk) = &chunk {
-                        progress = min(progress + chunk.len(), object_size);
+                        progress = min(progress + chunk.len(), reader_size);
                         pro_bar.set_position(progress as u64);
                     }
                     yield chunk;
@@ -350,6 +355,7 @@ impl ObjectStore {
     }
 
     /// Uploads an object to the Object API for staging.
+    #[allow(clippy::too_many_arguments)]
     async fn upload<S>(
         &self,
         provider: &impl ObjectProvider,

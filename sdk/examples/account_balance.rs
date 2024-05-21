@@ -5,7 +5,6 @@ use std::env;
 
 use anyhow::anyhow;
 use ethers::utils::hex::ToHexExt;
-use fvm_shared::econ::TokenAmount;
 
 use adm_sdk::{account::Account, network::Network};
 use adm_signer::{key::parse_secret_key, AccountKind, Signer, Wallet};
@@ -20,9 +19,6 @@ async fn main() -> anyhow::Result<()> {
     let pk = parse_secret_key(pk_kex)?;
 
     // Use testnet network defaults
-    // Note: The debit account _must_ hold at least 1 Calibration tFIL for the deposit
-    // plus enough to cover the transaction fee.
-    // Go to the faucet at https://faucet.calibnet.chainsafe-fil.io/ to get yourself some tFIL.
     let network = Network::Testnet.init();
 
     // Setup local wallet using private key from arg
@@ -30,21 +26,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Deposit some calibration funds into the subnet
     // Note: The debit account _must_ have Calibration
-    let tx = Account::deposit(
-        &signer,
-        signer.address(),
-        network.parent_subnet_config(Default::default())?,
-        TokenAmount::from_whole(1),
-    )
-    .await?;
+    let balance = Account::balance(&signer, network.subnet_config(Default::default())?).await?;
 
     println!(
-        "Deposited 1 tFIL to {}",
-        signer.evm_address()?.encode_hex_with_prefix()
-    );
-    println!(
-        "Transaction hash: 0x{}",
-        hex::encode(tx.transaction_hash.to_fixed_bytes())
+        "Balance of {}: {}",
+        signer.evm_address()?.encode_hex_with_prefix(),
+        balance.to_string()
     );
 
     Ok(())

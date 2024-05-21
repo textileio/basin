@@ -48,14 +48,10 @@ impl JsonRpcProvider<HttpClient> {
         object_url: Option<Url>,
     ) -> anyhow::Result<Self> {
         let inner = http_client(url, proxy_url)?;
-        let objects = match object_url {
-            Some(url) => Some(ObjectClient {
-                inner: reqwest::Client::new(),
-                url,
-            }),
-            None => None,
-        };
-
+        let objects = object_url.map(|url| ObjectClient {
+            inner: reqwest::Client::new(),
+            url,
+        });
         Ok(Self { inner, objects })
     }
 }

@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     let pk = parse_secret_key(pk_kex)?;
 
     // Use testnet network defaults
-    let network = Network::Testnet;
+    let network = Network::Testnet.init();
 
     // Setup network provider
     let provider = JsonRpcProvider::new_http(network.rpc_url()?, None, None)?;
@@ -42,26 +42,37 @@ async fn main() -> anyhow::Result<()> {
         Default::default(),
     )
     .await?;
-    println!(
-        "Created new accumulator {}; Transaction hash: {}",
-        machine.address(),
-        tx.hash
-    );
+    println!("Created new accumulator {}", machine.address(),);
+    println!("Transaction hash: 0x{}", tx.hash);
 
-    // Push a payload to the accumulator
-    let payload = Bytes::from("my_payload");
+    // Push a value to the accumulator
+    let value = Bytes::from("my_value");
     let tx = machine
-        .push(&provider, &mut signer, payload, Default::default())
+        .push(&provider, &mut signer, value, Default::default())
         .await?;
     println!(
-        "Pushed payload to accumulator {}; Transaction hash: {}",
+        "Pushed to accumulator {} with index {}",
         machine.address(),
-        tx.hash
+        tx.data.unwrap().index // Safe if broadcast mode is "commit". See `PushOptions`.
     );
+    println!("Transaction hash: 0x{}", tx.hash);
+
+    // Get the value back
+    let value = machine
+        .leaf(&provider, 0, FvmQueryHeight::Committed)
+        .await?;
+    println!(
+        "Value at index 0: '{}'",
+        std::str::from_utf8(&value).unwrap()
+    );
+
+    // Query for count
+    let count = machine.count(&provider, FvmQueryHeight::Committed).await?;
+    println!("Count: {}", count);
 
     // Query for the new root
     let root = machine.root(&provider, FvmQueryHeight::Committed).await?;
-    println!("New accumulator root {}", root);
+    println!("State root: {}", root);
 
     Ok(())
 }

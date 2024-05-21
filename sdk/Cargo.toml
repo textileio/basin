@@ -51,3 +51,6 @@ ipc-api = { workspace = true }
 
 adm_provider = { path = "../provider" }
 adm_signer = { path = "../signer" }
+
+[dev-dependencies]
+hex = { workspace = true }

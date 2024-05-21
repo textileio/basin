@@ -200,10 +200,7 @@ fn decode_count(deliver_tx: &DeliverTx) -> anyhow::Result<u64> {
 fn decode_peaks(deliver_tx: &DeliverTx) -> anyhow::Result<Vec<Cid>> {
     let data = decode_bytes(deliver_tx)?;
     let items = fvm_ipld_encoding::from_slice::<Vec<cid::Cid>>(&data)
+        .map(|v| v.iter().map(|c| (*c).into()).collect())
         .map_err(|e| anyhow!("error parsing as Vec<Cid>: {e}"))?;
-    let mut mapped: Vec<Cid> = vec![];
-    for i in items {
-        mapped.push(i.into());
-    }
-    Ok(mapped)
+    Ok(items)
 }

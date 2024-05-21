@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use fendermint_crypto::SecretKey;
+use fendermint_vm_actor_interface::eam::EthAddress;
 use fendermint_vm_message::{chain::ChainMessage, signed::Object, signed::SignedMessage};
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::{
@@ -10,6 +11,7 @@ use fvm_shared::{
 };
 
 use adm_provider::message::GasParams;
+use adm_provider::util::get_delegated_address;
 
 use crate::SubnetID;
 
@@ -20,6 +22,12 @@ use crate::SubnetID;
 pub trait Signer: Clone + Send + Sync {
     /// Returns the signer address.
     fn address(&self) -> Address;
+
+    /// Returns the signer EVM address.
+    fn evm_address(&self) -> anyhow::Result<EthAddress> {
+        let delegated = get_delegated_address(self.address())?;
+        Ok(EthAddress::from(delegated))
+    }
 
     /// Returns the signer [`SecretKey`] if it exists.
     fn secret_key(&self) -> Option<SecretKey>;

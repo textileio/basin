@@ -14,10 +14,7 @@ use adm_provider::{
     tx::BroadcastMode as SDKBroadcastMode,
     util::{parse_address, parse_query_height, parse_token_amount_from_atto},
 };
-use adm_sdk::{
-    network::{use_testnet_addresses, Network as SdkNetwork},
-    TxParams,
-};
+use adm_sdk::{network::Network as SdkNetwork, TxParams};
 use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Wallet};
 
 use crate::account::{handle_account, AccountArgs};
@@ -174,10 +171,7 @@ async fn main() -> anyhow::Result<()> {
         .init()
         .unwrap();
 
-    match cli.network {
-        Network::Testnet | Network::Localnet | Network::Devnet => use_testnet_addresses(),
-        _ => {}
-    }
+    cli.network.get().init();
 
     match &cli.command.clone() {
         Commands::Account(args) => handle_account(cli, args).await,
