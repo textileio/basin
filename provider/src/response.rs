@@ -47,7 +47,7 @@ pub fn decode_cid(deliver_tx: &DeliverTx) -> anyhow::Result<Cid> {
 
 /// JSON serialization friendly version of [`cid::Cid`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Cid(cid::Cid);
+pub struct Cid(pub cid::Cid);
 
 impl From<cid::Cid> for Cid {
     fn from(v: cid::Cid) -> Self {

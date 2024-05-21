@@ -1,10 +1,9 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use std::sync::Arc;
+use std::cmp::min;
 
 use anyhow::anyhow;
-use async_tempfile::TempFile;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
@@ -18,35 +17,76 @@ use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::{query::FvmQueryHeight, signed::Object as MessageObject};
 use fvm_ipld_encoding::{serde_bytes::ByteBuf, RawBytes};
 use fvm_shared::address::Address;
+use indicatif::HumanDuration;
 use num_traits::Zero;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt},
-    sync::{mpsc, mpsc::Sender, Mutex},
-    task::LocalSet,
+    io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, AsyncWrite, AsyncWriteExt},
+    time::Instant,
 };
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_stream::StreamExt;
+use tokio_util::io::ReaderStream;
 use unixfs_v1::file::adder::{Chunker, FileAdder};
 
 use adm_provider::{
     message::{local_message, object_upload_message, GasParams},
-    object::ObjectService,
+    object::ObjectProvider,
+    query::QueryProvider,
     response::{decode_bytes, decode_cid, Cid},
-    BroadcastMode, Provider, QueryProvider, TxReceipt,
+    tx::{BroadcastMode, TxReceipt},
+    Provider,
 };
 use adm_signer::Signer;
 
+use crate::progress::{new_message_bar, new_multi_bar, SPARKLE};
 use crate::{
-    machine::{deploy_machine, DeployTx, Machine},
-    progress_bar::ObjectProgressBar,
+    machine::{deploy_machine, DeployTxReceipt, Machine},
+    progress::new_progress_bar,
 };
 
 const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
 
-/// Object query params.
-#[derive(Default, Debug)]
-pub struct QueryParams {
+/// Object add options.
+#[derive(Clone, Default, Debug)]
+pub struct AddOptions {
+    /// Overwrite the object if it already exists.
+    pub overwrite: bool,
+    /// Broadcast mode for the transaction.
+    pub broadcast_mode: BroadcastMode,
+    /// Gas params for the transaction.
+    pub gas_params: GasParams,
+    /// Whether to show progress-related output (useful for command-line interfaces).
+    pub show_progress: bool,
+}
+
+/// Object delete options.
+#[derive(Clone, Default, Debug)]
+pub struct DeleteOptions {
+    /// Broadcast mode for the transaction.
+    pub broadcast_mode: BroadcastMode,
+    /// Gas params for the transaction.
+    pub gas_params: GasParams,
+}
+
+/// Object get options.
+#[derive(Clone, Default, Debug)]
+pub struct GetOptions {
+    /// Optional range of bytes to get from the object.
+    /// Format: "start-end" (inclusive).
+    /// Example: "0-99" (first 100 bytes).
+    /// This follows the HTTP range header format:
+    /// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range
+    pub range: Option<String>,
+    /// Query block height.
+    pub height: FvmQueryHeight,
+    /// Whether to show progress-related output (useful for command-line interfaces).
+    pub show_progress: bool,
+}
+
+/// Object query options.
+#[derive(Clone, Debug)]
+pub struct QueryOptions {
     /// The prefix to filter objects by.
     pub prefix: String,
     /// The delimiter used to define object hierarchy.
@@ -55,6 +95,20 @@ pub struct QueryParams {
     pub offset: u64,
     /// The maximum number of objects to list.
     pub limit: u64,
+    /// Query block height.
+    pub height: FvmQueryHeight,
+}
+
+impl Default for QueryOptions {
+    fn default() -> Self {
+        QueryOptions {
+            prefix: Default::default(),
+            delimiter: "/".into(),
+            offset: Default::default(),
+            limit: Default::default(),
+            height: Default::default(),
+        }
+    }
 }
 
 /// Parse a range string and return start and end byte positions.
@@ -96,7 +150,7 @@ impl Machine for ObjectStore {
         signer: &mut impl Signer,
         write_access: WriteAccess,
         gas_params: GasParams,
-    ) -> anyhow::Result<(Self, DeployTx)>
+    ) -> anyhow::Result<(Self, DeployTxReceipt)>
     where
         C: Client + Send + Sync,
     {
@@ -122,121 +176,205 @@ impl Machine for ObjectStore {
 
 impl ObjectStore {
     /// Add an object into the object store.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn add<C>(
+    pub async fn add<C, R>(
         &self,
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
-        object_client: impl ObjectService,
-        mut reader: impl AsyncRead + Unpin + 'static,
         key: &str,
-        overwrite: bool,
-        broadcast_mode: BroadcastMode,
-        gas_params: GasParams,
-        progress_bar: Option<ObjectProgressBar>,
+        mut reader: R,
+        options: AddOptions,
     ) -> anyhow::Result<TxReceipt<Cid>>
     where
         C: Client + Send + Sync,
+        R: AsyncRead + AsyncSeek + Unpin + Send + 'static,
     {
-        let mut first_chunk = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
-        let first_chunk_size = reader.read(&mut first_chunk).await?;
+        let started = Instant::now();
+        let bars = new_multi_bar(!options.show_progress);
+        let msg_bar = bars.add(new_message_bar());
 
-        let message = if first_chunk_size.is_zero() {
-            return Err(anyhow!("cannot put empty object"));
-        } else if first_chunk_size > MAX_INTERNAL_OBJECT_LENGTH {
-            let (tx, rx) = mpsc::channel::<Vec<u8>>(1024);
+        // Sample reader to determine what kind of object will be added
+        let mut sample = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
+        let sampled = reader.read(&mut sample).await?;
+        if sampled.is_zero() {
+            return Err(anyhow!("cannot add empty object"));
+        }
+        reader.rewind().await?;
 
-            // Preprocess Object before uploading
-            with_progress_bar(progress_bar.as_ref(), |p| p.show_processing());
-            let (object_cid, bytes_read) = process_object(reader, tx, first_chunk).await?;
+        let tx = if sampled > MAX_INTERNAL_OBJECT_LENGTH {
+            // Handle as a detached object
+
+            // Generate object Cid
+            // We do this here to avoid moving the reader
+            let chunk_size = 1024 * 1024; // size-1048576
+            let mut adder = FileAdder::builder()
+                .with_chunker(Chunker::Size(chunk_size))
+                .build();
+            let mut buffer = vec![0; chunk_size];
+            let mut reader_size: usize = 0;
+            let mut object_size: usize = 0;
+
+            msg_bar.set_prefix("[1/3]");
+            let mut chunk = Cid::from(cid::Cid::default());
+            loop {
+                match reader.read(&mut buffer).await {
+                    Ok(0) => {
+                        break;
+                    }
+                    Ok(n) => {
+                        reader_size += n;
+                        let (leaf, n) = adder.push(&buffer[..n]);
+                        for (c, _) in leaf {
+                            chunk = Cid::from(cid::Cid::try_from(c.to_bytes())?);
+                            msg_bar.set_message(format!("Processed chunk: {}", c));
+                        }
+                        object_size += n;
+                    }
+                    Err(e) => {
+                        return Err(e.into());
+                    }
+                }
+            }
+            let unixfs_iterator = adder.finish();
+            // Turns out if input is equal to chunk size, the iterator will be empty,
+            // and the object cid will be equal to the first processed chunk ¯\_(ツ)_/¯
+            let last = unixfs_iterator.last();
+            let object_cid = match last {
+                Some((c, _)) => Cid::from(cid::Cid::try_from(c.to_bytes())?),
+                None => chunk,
+            };
+
+            // Rewind and stream for uploading
+            msg_bar.set_prefix("[2/3]");
+            msg_bar.set_message(format!("Uploading {} to network...", object_cid));
+            let pro_bar = bars.add(new_progress_bar(reader_size));
+            reader.rewind().await?;
+            let mut stream = ReaderStream::new(reader);
+            let async_stream = async_stream::stream! {
+                let mut progress: usize = 0;
+                while let Some(chunk) = stream.next().await {
+                    if let Ok(chunk) = &chunk {
+                        progress = min(progress + chunk.len(), reader_size);
+                        pro_bar.set_position(progress as u64);
+                    }
+                    yield chunk;
+                }
+                pro_bar.finish_and_clear();
+            };
 
             // Upload Object to Object API
-            with_progress_bar(progress_bar.as_ref(), |p| p.show_uploading());
             let response_cid = self
                 .upload(
+                    provider,
                     signer,
-                    object_client,
                     key,
+                    async_stream,
                     object_cid,
-                    first_chunk_size + bytes_read,
-                    overwrite,
-                    rx,
+                    object_size,
+                    options.overwrite,
                 )
                 .await?;
 
             // Verify uploaded CID with locally computed CID
             assert_eq!(response_cid, object_cid);
-            with_progress_bar(progress_bar.as_ref(), |p| {
-                p.show_uploaded(response_cid);
-                p.show_cid_verified();
-                p.finish();
-            });
 
             // Broadcast transaction with Object's CID
+            msg_bar.set_prefix("[3/3]");
+            msg_bar.set_message("Broadcasting transaction...");
             let params = PutParams {
                 key: key.into(),
-                kind: ObjectKind::External(object_cid),
-                overwrite,
+                kind: ObjectKind::External(object_cid.0),
+                overwrite: options.overwrite,
             };
             let serialized_params = RawBytes::serialize(params.clone())?;
             let object = Some(MessageObject::new(
                 params.key.clone(),
-                object_cid,
+                object_cid.0,
                 self.address,
             ));
-
-            signer
+            let message = signer
                 .transaction(
                     self.address,
                     Default::default(),
                     PutObject as u64,
                     serialized_params,
                     object,
-                    gas_params,
+                    options.gas_params,
                 )
-                .await?
+                .await?;
+
+            let tx = provider
+                .perform(message, options.broadcast_mode, decode_cid)
+                .await?;
+
+            msg_bar.println(format!(
+                "{} Added detached object in {} (cid={}; size={})",
+                SPARKLE,
+                HumanDuration(started.elapsed()),
+                object_cid,
+                object_size
+            ));
+            tx
         } else {
             // Handle as an internal object
-            first_chunk.truncate(first_chunk_size);
+
+            // Broadcast transaction with Object's CID
+            msg_bar.set_prefix("[1/1]");
+            msg_bar.set_message("Broadcasting transaction...");
+            sample.truncate(sampled);
             let params = PutParams {
                 key: key.into(),
-                kind: ObjectKind::Internal(ByteBuf(first_chunk)),
-                overwrite,
+                kind: ObjectKind::Internal(ByteBuf(sample)),
+                overwrite: options.overwrite,
             };
             let serialized_params = RawBytes::serialize(params)?;
-            with_progress_bar(progress_bar.as_ref(), |p| p.finish());
-
-            signer
+            let message = signer
                 .transaction(
                     self.address,
                     Default::default(),
                     PutObject as u64,
                     serialized_params,
                     None,
-                    gas_params,
+                    options.gas_params,
                 )
-                .await?
+                .await?;
+            let tx = provider
+                .perform(message, options.broadcast_mode, decode_cid)
+                .await?;
+
+            msg_bar.println(format!(
+                "{} Added object in {} (size={})",
+                SPARKLE,
+                HumanDuration(started.elapsed()),
+                sampled
+            ));
+            tx
         };
 
-        provider.perform(message, broadcast_mode, decode_cid).await
+        msg_bar.finish_and_clear();
+        Ok(tx)
     }
 
     /// Uploads an object to the Object API for staging.
     #[allow(clippy::too_many_arguments)]
-    async fn upload(
+    async fn upload<S>(
         &self,
+        provider: &impl ObjectProvider,
         signer: &mut impl Signer,
-        object_client: impl ObjectService,
         key: &str,
-        cid: cid::Cid,
+        stream: S,
+        cid: Cid,
         size: usize,
         overwrite: bool,
-        rx: mpsc::Receiver<Vec<u8>>,
-    ) -> anyhow::Result<cid::Cid> {
+    ) -> anyhow::Result<Cid>
+    where
+        S: futures_core::stream::TryStream + Send + 'static,
+        S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+        Bytes: From<S::Ok>,
+    {
         let from = signer.address();
         let params = PutParams {
             key: key.into(),
-            kind: ObjectKind::External(cid),
+            kind: ObjectKind::External(cid.0),
             overwrite,
         };
         let serialized_params = RawBytes::serialize(params)?;
@@ -245,7 +383,7 @@ impl ObjectStore {
             object_upload_message(from, self.address, PutObject as u64, serialized_params);
         let singed_message = signer.sign_message(
             message,
-            Some(MessageObject::new(key.into(), cid, self.address)),
+            Some(MessageObject::new(key.into(), cid.0, self.address)),
         )?;
         let serialized_signed_message = fvm_ipld_encoding::to_vec(&singed_message)?;
 
@@ -256,10 +394,8 @@ impl ObjectStore {
             }
         };
 
-        let object_stream = ReceiverStream::new(rx)
-            .map(|bytes_vec| Ok::<Bytes, reqwest::Error>(Bytes::from(bytes_vec)));
-        let body = reqwest::Body::wrap_stream(object_stream);
-        let response = object_client
+        let body = reqwest::Body::wrap_stream(stream);
+        let response = provider
             .upload(
                 body,
                 size,
@@ -268,7 +404,7 @@ impl ObjectStore {
             )
             .await?;
 
-        Ok(response.cid)
+        Ok(response)
     }
 
     /// Delete an object.
@@ -277,8 +413,7 @@ impl ObjectStore {
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         key: &str,
-        broadcast_mode: BroadcastMode,
-        gas_params: GasParams,
+        options: DeleteOptions,
     ) -> anyhow::Result<TxReceipt<Cid>>
     where
         C: Client + Send + Sync,
@@ -292,98 +427,111 @@ impl ObjectStore {
                 DeleteObject as u64,
                 params,
                 None,
-                gas_params,
+                options.gas_params,
             )
             .await?;
-        provider.perform(message, broadcast_mode, decode_cid).await
+        provider
+            .perform(message, options.broadcast_mode, decode_cid)
+            .await
     }
 
     /// Get an object at the given key, range, and height.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn get(
+    pub async fn get<W>(
         &self,
-        provider: &impl QueryProvider,
-        object_client: impl ObjectService,
+        provider: &(impl QueryProvider + ObjectProvider),
         key: &str,
-        range: Option<String>,
-        height: FvmQueryHeight,
-        mut writer: impl AsyncWrite + Unpin + Send + 'static,
-        progress_bar: Option<ObjectProgressBar>,
-    ) -> anyhow::Result<()> {
+        mut writer: W,
+        options: GetOptions,
+    ) -> anyhow::Result<()>
+    where
+        W: AsyncWrite + Unpin + Send + 'static,
+    {
+        let started = Instant::now();
+        let bars = new_multi_bar(!options.show_progress);
+        let msg_bar = bars.add(new_message_bar());
+
+        msg_bar.set_prefix("[1/2]");
+        msg_bar.set_message("Getting object info...");
         let params = GetParams { key: key.into() };
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, GetObject as u64, params);
-        let response = provider.call(message, height, decode_get).await?;
+        let response = provider.call(message, options.height, decode_get).await?;
 
-        if let Some(object) = response.value {
-            match object {
-                Object::Internal(buf) => {
-                    if let Some(range) = range {
-                        let (start, end) = parse_range(range, buf.0.len() as u64)?;
-                        writer
-                            .write_all(&buf.0[start as usize..=end as usize])
-                            .await?;
-                    } else {
-                        writer.write_all(&buf.0).await?;
-                    }
-                    Ok(())
-                }
-                Object::External((buf, resolved)) => {
-                    let cid = cid::Cid::try_from(buf.0)?;
-                    if !resolved {
-                        return Err(anyhow!("object is not resolved"));
-                    }
-                    // The `download` method is currently using /objectstore API
-                    // since we have decided to keep the GET APIs intact for a while.
-                    // If we decide to remove these APIs, we can move to Object API
-                    // for downloading the file with CID.
-                    self.download(object_client, key, range.clone(), height, writer)
+        let object = response
+            .value
+            .ok_or_else(|| anyhow!("object not found for key '{}'", key))?;
+        match object {
+            Object::Internal(buf) => {
+                msg_bar.set_prefix("[2/2]");
+                msg_bar.set_message(format!("Writing {} bytes...", buf.0.len()));
+                if let Some(range) = options.range {
+                    let (start, end) = parse_range(range, buf.0.len() as u64)?;
+                    writer
+                        .write_all(&buf.0[start as usize..=end as usize])
                         .await?;
-                    with_progress_bar(progress_bar.as_ref(), |p| {
-                        p.show_downloaded(cid);
-                        p.finish();
-                    });
-                    Ok(())
+                } else {
+                    writer.write_all(&buf.0).await?;
                 }
-            }
-        } else {
-            Err(anyhow!("object not found for key '{}'", key))
-        }
-    }
 
-    /// Download an object for the given key, range, and height.
-    async fn download(
-        &self,
-        object_client: impl ObjectService,
-        key: &str,
-        range: Option<String>,
-        height: FvmQueryHeight,
-        writer: impl AsyncWrite + Unpin + Send + 'static,
-    ) -> anyhow::Result<()> {
-        object_client
-            .download(self.address, key, range, height.into(), writer)
-            .await?;
+                msg_bar.println(format!(
+                    "{} Got object from chain in {} (size={})",
+                    SPARKLE,
+                    HumanDuration(started.elapsed()),
+                    buf.0.len()
+                ));
+            }
+            Object::External((buf, resolved)) => {
+                let cid = cid::Cid::try_from(buf.0)?;
+                if !resolved {
+                    return Err(anyhow!("object is not resolved"));
+                }
+                // The `download` method is currently using /objectstore API
+                // since we have decided to keep the GET APIs intact for a while.
+                // If we decide to remove these APIs, we can move to Object API
+                // for downloading the file with CID.
+                // TODO: If detached objects had size on-chain, we could show download progress.
+                msg_bar.set_prefix("[2/2]");
+                msg_bar.set_message(format!("Downloading {}...", cid));
+                provider
+                    .download(
+                        self.address,
+                        key,
+                        options.range,
+                        options.height.into(),
+                        writer,
+                    )
+                    .await?;
+
+                msg_bar.println(format!(
+                    "{} Downloaded detached object in {} (cid={})",
+                    SPARKLE,
+                    HumanDuration(started.elapsed()),
+                    cid
+                ));
+            }
+        }
+
+        msg_bar.finish_and_clear();
         Ok(())
     }
 
     /// Query for objects with params at the given height.
     ///
-    /// Use [`QueryParams`] for filtering and pagination.
+    /// Use [`QueryOptions`] for filtering and pagination.
     pub async fn query(
         &self,
         provider: &impl QueryProvider,
-        params: QueryParams,
-        height: FvmQueryHeight,
+        options: QueryOptions,
     ) -> anyhow::Result<Option<ObjectList>> {
         let params = fendermint_actor_objectstore::ListParams {
-            prefix: params.prefix.into(),
-            delimiter: params.delimiter.into(),
-            offset: params.offset,
-            limit: params.limit,
+            prefix: options.prefix.into(),
+            delimiter: options.delimiter.into(),
+            offset: options.offset,
+            limit: options.limit,
         };
         let params = RawBytes::serialize(params)?;
         let message = local_message(self.address, ListObjects as u64, params);
-        let response = provider.call(message, height, decode_list).await?;
+        let response = provider.call(message, options.height, decode_list).await?;
         Ok(response.value)
     }
 }
@@ -398,236 +546,4 @@ fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<Option<ObjectList>> {
     let data = decode_bytes(deliver_tx)?;
     fvm_ipld_encoding::from_slice::<Option<ObjectList>>(&data)
         .map_err(|e| anyhow!("error parsing as Option<ObjectList>: {e}"))
-}
-
-fn with_progress_bar<F>(progrss_bar: Option<&ObjectProgressBar>, f: F)
-where
-    F: FnOnce(&ObjectProgressBar),
-{
-    if let Some(progress_bar) = progrss_bar {
-        f(progress_bar);
-    }
-}
-
-#[derive(Clone)]
-struct ObjectProcessor {
-    tmp: Arc<Mutex<TempFile>>,
-    total_bytes: Arc<Mutex<usize>>,
-}
-
-impl ObjectProcessor {
-    async fn new() -> anyhow::Result<Self> {
-        let tmp = TempFile::new().await?;
-        Ok(ObjectProcessor {
-            tmp: Arc::new(Mutex::new(tmp)),
-            total_bytes: Arc::new(Mutex::new(0)),
-        })
-    }
-}
-
-impl ObjectProcessor {
-    async fn processed_bytes_count(&self) -> usize {
-        *self.total_bytes.lock().await
-    }
-
-    async fn process_chunk(
-        &mut self,
-        tx: Sender<Vec<u8>>,
-        first_chunk: Vec<u8>,
-        mut reader: impl AsyncRead + Unpin,
-    ) -> anyhow::Result<()> {
-        // write first chunk to mpsc channel for uploading
-        // and also to temp file for CID computation
-        tx.send(first_chunk.clone()).await?;
-        let mut object_file = self.tmp.lock().await;
-        object_file.write_all(&first_chunk).await?;
-
-        // read remaining bytes from the reader into temp file and mpsc channel
-        let mut buffer = vec![0; 10 * 1024 * 1024];
-        loop {
-            match reader.read(&mut buffer).await {
-                Ok(0) => {
-                    break;
-                }
-                Ok(n) => {
-                    if tx.send(buffer[..n].to_vec()).await.is_err() {
-                        return Err(anyhow!("error sending data to channel"))?;
-                    }
-                    object_file.write_all(&buffer[..n]).await?;
-                    *self.total_bytes.lock().await += n;
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
-        }
-        object_file.flush().await?;
-        object_file.rewind().await?;
-
-        Ok(())
-    }
-
-    async fn generate_cid(&mut self) -> anyhow::Result<cid::Cid> {
-        let chunk_size = 1024 * 1024; // size-1048576
-        let mut adder = FileAdder::builder()
-            .with_chunker(Chunker::Size(chunk_size))
-            .build();
-        let mut buffer = vec![0; chunk_size];
-        let mut tmp = self.tmp.lock().await;
-        loop {
-            match tmp.read(&mut buffer).await {
-                Ok(0) => {
-                    break;
-                }
-                Ok(n) => {
-                    let _ = adder.push(&buffer[..n]);
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
-        }
-        let unixfs_iterator = adder.finish();
-        let (cid, _) = unixfs_iterator
-            .last()
-            .ok_or_else(|| anyhow!("Cannot get root CID"))?;
-        let cid = cid::Cid::try_from(cid.to_bytes())
-            .map_err(|e| anyhow!("Cannot generate CID: {}", e))?;
-        Ok(cid)
-    }
-}
-
-/// Process the object from the reader and send it to the channel.
-/// Returns the CID and the total bytes read from the reader.
-///
-/// Uses a LocalSet to spawn the non-Send future.
-/// This is necessary because the clap's AsyncReader impl
-/// is not Send. LocalSet is used to spawn the non-Send futures.
-async fn process_object(
-    reader: impl AsyncRead + Unpin + 'static,
-    tx: Sender<Vec<u8>>,
-    first_chunk: Vec<u8>,
-) -> anyhow::Result<(cid::Cid, usize)> {
-    let local_set = LocalSet::new();
-    let mut object_processor = ObjectProcessor::new().await?;
-
-    let chunk = first_chunk[..].to_vec();
-    // clone and move the object_processor into the future
-    let mut object_processor_clone = object_processor.clone();
-    local_set.spawn_local(async move {
-        object_processor_clone
-            .process_chunk(tx, chunk, reader)
-            .await
-    });
-    local_set.await;
-
-    Ok((
-        object_processor.generate_cid().await?,
-        object_processor.processed_bytes_count().await,
-    ))
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::Error;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-
-    use rand::{thread_rng, Rng};
-    use tokio::io::AsyncRead;
-    use tokio::io::ReadBuf;
-    use tokio::sync::mpsc;
-
-    use super::*;
-
-    struct MockReader {
-        content: Vec<u8>,
-        pos: usize,
-    }
-
-    impl MockReader {
-        fn new(content: Vec<u8>) -> Self {
-            MockReader { content, pos: 0 }
-        }
-    }
-
-    impl AsyncRead for MockReader {
-        fn poll_read(
-            mut self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-            buf: &mut ReadBuf<'_>,
-        ) -> Poll<Result<(), Error>> {
-            if self.pos >= self.content.len() {
-                return Poll::Ready(Ok(()));
-            }
-            let max_len = buf.remaining();
-            let data_len = self.content.len() - self.pos;
-            let len_to_copy = std::cmp::min(max_len, data_len);
-
-            buf.put_slice(&self.content[self.pos..self.pos + len_to_copy]);
-            self.pos += len_to_copy;
-
-            Poll::Ready(Ok(()))
-        }
-    }
-
-    #[tokio::test]
-    async fn test_process_object() {
-        let mut rng = thread_rng();
-        let mut reader_content = vec![0u8; 1024];
-        rng.fill(&mut reader_content[..]);
-
-        let mut reader = MockReader::new(reader_content.clone());
-        let (tx, mut rx) = mpsc::channel(10);
-
-        // Read first 1024 bytes from the reader an assign it to first chunk
-        let mut first_chunk = vec![0u8; 1024];
-        reader
-            .read_exact(&mut first_chunk)
-            .await
-            .expect("Failed to read the first chunk");
-
-        let (cid, total) = process_object(reader, tx, first_chunk.clone())
-            .await
-            .unwrap();
-
-        // Initialize an empty vector to hold the chunks received
-        // from object processor
-        let mut sent_chunks = Vec::new();
-        while let Some(chunk) = rx.recv().await {
-            sent_chunks.push(chunk);
-        }
-
-        // Verify total bytes_read (first_chunk + remaining)
-        assert_eq!(total + first_chunk.len(), 1024);
-
-        // Verify CID calculation was correct by hashing the reader
-        let mut tmp = TempFile::new().await.unwrap();
-        tmp.write_all(&reader_content).await.unwrap();
-        tmp.flush().await.unwrap();
-        tmp.rewind().await.unwrap();
-        let chunk_size = 1024 * 1024;
-        let mut adder = FileAdder::builder()
-            .with_chunker(Chunker::Size(chunk_size))
-            .build();
-        let mut buffer = vec![0; chunk_size];
-        loop {
-            match tmp.read(&mut buffer).await {
-                Ok(0) => {
-                    break;
-                }
-                Ok(n) => {
-                    let _ = adder.push(&buffer[..n]);
-                }
-                Err(e) => {
-                    panic!("Error reading from temp file: {}", e);
-                }
-            }
-        }
-        let unixfs_iterator = adder.finish();
-        let (expected_cid, _) = unixfs_iterator.last().unwrap();
-        let expected_cid = cid::Cid::try_from(expected_cid.to_bytes()).unwrap();
-
-        assert_eq!(expected_cid, cid);
-    }
 }

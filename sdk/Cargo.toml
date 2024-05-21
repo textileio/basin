@@ -9,9 +9,11 @@ readme.workspace = true
 repository.workspace = true
 keywords.workspace = true
 version.workspace = true
+autoexamples = true
 
 [dependencies]
 anyhow = { workspace = true }
+async-stream = { workspace = true }
 async-tempfile = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
@@ -22,13 +24,16 @@ num-traits = { workspace = true }
 serde = { workspace = true }
 ethers = { workspace = true }
 ethers-contract = { workspace = true }
+futures-core = { workspace = true }
 indicatif = { workspace = true }
+lazy_static = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 tendermint = { workspace = true }
 tendermint-rpc = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
 unixfs-v1 = { workspace = true }
 
 fvm_ipld_encoding = { workspace = true }
@@ -46,3 +51,6 @@ ipc-api = { workspace = true }
 
 adm_provider = { path = "../provider" }
 adm_signer = { path = "../signer" }
+
+[dev-dependencies]
+hex = { workspace = true }

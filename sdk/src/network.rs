@@ -33,9 +33,22 @@ const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x2f71A1d47ccc2E13E646D4C1bcF
 const TESTNET_OBJECT_API_URL: &str = "https://object-api.n1.testnet.basin.storage";
 const LOCALNET_OBJECT_API_URL: &str = "http://127.0.0.1:8001";
 
-/// Set current network to use testnet addresses.
-pub fn use_testnet_addresses() {
-    set_current_network(FvmNetwork::Testnet);
+/// Options for [`EVMSubnet`] configurations.
+#[derive(Debug, Clone)]
+pub struct SubnetOptions {
+    /// The EVM RPC provider request timeout.
+    pub evm_rpc_timeout: Duration,
+    /// The EVM RPC provider authorization token.
+    pub evm_rpc_auth_token: Option<String>,
+}
+
+impl Default for SubnetOptions {
+    fn default() -> Self {
+        Self {
+            evm_rpc_timeout: RPC_TIMEOUT,
+            evm_rpc_auth_token: None,
+        }
+    }
 }
 
 /// Network presets for a subnet configuration and RPC URLs.
@@ -52,6 +65,18 @@ pub enum Network {
 }
 
 impl Network {
+    /// Sets the current [`FvmNetwork`].
+    /// Note: This _must_ be called before using the SDK.
+    pub fn init(&self) -> &Self {
+        match self {
+            Network::Mainnet => set_current_network(FvmNetwork::Mainnet),
+            Network::Testnet | Network::Localnet | Network::Devnet => {
+                set_current_network(FvmNetwork::Testnet)
+            }
+        }
+        self
+    }
+
     /// Returns the network [`SubnetID`].
     pub fn subnet_id(&self) -> anyhow::Result<SubnetID> {
         match self {
@@ -63,16 +88,12 @@ impl Network {
     }
 
     /// Returns the network [`EVMSubnet`] configuration.
-    pub fn subnet_config(
-        &self,
-        evm_rpc_timeout: Option<Duration>,
-        evm_rpc_auth_token: Option<String>,
-    ) -> anyhow::Result<EVMSubnet> {
+    pub fn subnet_config(&self, options: SubnetOptions) -> anyhow::Result<EVMSubnet> {
         Ok(EVMSubnet {
             id: self.subnet_id()?,
             provider_http: self.evm_rpc_url()?,
-            provider_timeout: Some(evm_rpc_timeout.unwrap_or(RPC_TIMEOUT)),
-            auth_token: evm_rpc_auth_token,
+            provider_timeout: Some(options.evm_rpc_timeout),
+            auth_token: options.evm_rpc_auth_token,
             registry_addr: self.evm_registry()?,
             gateway_addr: self.evm_gateway()?,
         })
@@ -124,16 +145,12 @@ impl Network {
     }
 
     /// Returns the network [`EVMSubnet`] parent configuration.
-    pub fn parent_subnet_config(
-        &self,
-        evm_rpc_timeout: Option<Duration>,
-        evm_rpc_auth_token: Option<String>,
-    ) -> anyhow::Result<EVMSubnet> {
+    pub fn parent_subnet_config(&self, options: SubnetOptions) -> anyhow::Result<EVMSubnet> {
         Ok(EVMSubnet {
             id: self.subnet_id()?,
             provider_http: self.parent_evm_rpc_url()?,
-            provider_timeout: Some(evm_rpc_timeout.unwrap_or(RPC_TIMEOUT)),
-            auth_token: evm_rpc_auth_token,
+            provider_timeout: Some(options.evm_rpc_timeout),
+            auth_token: options.evm_rpc_auth_token,
             registry_addr: self.parent_evm_registry()?,
             gateway_addr: self.parent_evm_gateway()?,
         })

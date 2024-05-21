@@ -7,7 +7,7 @@ pub mod account;
 pub mod ipc;
 pub mod machine;
 pub mod network;
-pub mod progress_bar;
+pub mod progress;
 
 /// Arguments common to transactions.
 #[derive(Clone, Default, Debug)]

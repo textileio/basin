@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use std::fmt::Display;
+use std::str::FromStr;
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
@@ -10,32 +11,48 @@ use fendermint_vm_message::{
     chain::ChainMessage,
     query::{FvmQuery, FvmQueryHeight},
 };
+use futures_util::StreamExt;
+use fvm_shared::address::Address;
+use reqwest::multipart::{Form, Part};
 use tendermint::abci::response::DeliverTx;
 use tendermint::block::Height;
 use tendermint_rpc::{
     endpoint::abci_query::AbciQuery, Client, HttpClient, Scheme, Url, WebSocketClient,
     WebSocketClientDriver, WebSocketClientUrl,
 };
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::provider::{BroadcastMode, QueryProvider, TxProvider, TxReceipt};
+use crate::object::ObjectProvider;
+use crate::query::QueryProvider;
+use crate::response::Cid;
+use crate::tx::{BroadcastMode, TxProvider, TxReceipt};
 use crate::{Provider, TendermintClient};
 
 /// A JSON RPC ADM chain provider.
 #[derive(Clone)]
 pub struct JsonRpcProvider<C = HttpClient> {
     inner: C,
+    objects: Option<ObjectClient>,
 }
 
-impl<C> JsonRpcProvider<C> {
-    pub fn new(inner: C) -> Self {
-        Self { inner }
-    }
+#[derive(Clone)]
+struct ObjectClient {
+    inner: reqwest::Client,
+    url: Url,
 }
 
 impl JsonRpcProvider<HttpClient> {
-    pub fn new_http(url: Url, proxy_url: Option<Url>) -> anyhow::Result<Self> {
+    pub fn new_http(
+        url: Url,
+        proxy_url: Option<Url>,
+        object_url: Option<Url>,
+    ) -> anyhow::Result<Self> {
         let inner = http_client(url, proxy_url)?;
-        Ok(Self { inner })
+        let objects = object_url.map(|url| ObjectClient {
+            inner: reqwest::Client::new(),
+            url,
+        });
+        Ok(Self { inner, objects })
     }
 }
 
@@ -126,9 +143,107 @@ where
     }
 }
 
+#[async_trait]
+impl<C> ObjectProvider for JsonRpcProvider<C>
+where
+    C: Client + Sync + Send,
+{
+    async fn upload(
+        &self,
+        body: reqwest::Body,
+        total_bytes: usize,
+        msg: String,
+        chain_id: u64,
+    ) -> anyhow::Result<Cid> {
+        let client = self
+            .objects
+            .clone()
+            .ok_or_else(|| anyhow!("object provider is required"))?;
+
+        let part = Part::stream_with_length(body, total_bytes as u64)
+            .file_name("upload")
+            .mime_str("application/octet-stream")?;
+
+        let form = Form::new()
+            .text("chain_id", chain_id.to_string())
+            .text("msg", msg)
+            .part("object", part);
+
+        let url = format!("{}v1/objects", client.url);
+        let response = client.inner.post(url).multipart(form).send().await?;
+        if !response.status().is_success() {
+            return Err(anyhow!(format!(
+                "failed to upload object: {}",
+                response.text().await?
+            )));
+        }
+
+        let cid_str = response.text().await?;
+        let cid = Cid::from_str(&cid_str)?;
+
+        Ok(cid)
+    }
+
+    async fn download<W>(
+        &self,
+        address: Address,
+        key: &str,
+        range: Option<String>,
+        height: u64,
+        mut writer: W,
+    ) -> anyhow::Result<()>
+    where
+        W: AsyncWrite + Unpin + Send + 'static,
+    {
+        let client = self
+            .objects
+            .clone()
+            .ok_or_else(|| anyhow!("object provider is required"))?;
+
+        let url = format!(
+            "{}v1/objectstores/{}/{}?height={}",
+            client.url, address, key, height
+        );
+        let response = if let Some(range) = range {
+            client
+                .inner
+                .get(url)
+                .header("Range", format!("bytes={}", range))
+                .send()
+                .await?
+        } else {
+            client.inner.get(url).send().await?
+        };
+        if !response.status().is_success() {
+            return Err(anyhow!(format!(
+                "failed to download object: {}",
+                response.text().await?
+            )));
+        }
+
+        let mut stream = response.bytes_stream();
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(chunk) => {
+                    writer.write_all(&chunk).await?;
+                }
+                Err(e) => {
+                    return Err(anyhow!(e));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Format transaction receipt errors.
 fn format_err(info: &str, log: &str) -> String {
-    format!("info: {}; log: {}", info, log)
+    if log.is_empty() {
+        info.into()
+    } else {
+        format!("info: {}; log: {}", info, log)
+    }
 }
 
 // Retrieve the proxy URL with precedence:

@@ -96,6 +96,7 @@ dependencies = [
  "adm_provider",
  "adm_signer",
  "anyhow",
+ "async-stream",
  "async-tempfile",
  "async-trait",
  "base64 0.22.0",
@@ -110,11 +111,14 @@ dependencies = [
  "fendermint_crypto",
  "fendermint_vm_actor_interface",
  "fendermint_vm_message",
+ "futures-core",
  "fvm_ipld_encoding",
  "fvm_shared",
+ "hex",
  "indicatif",
  "ipc-api",
  "ipc_actors_abis",
+ "lazy_static",
  "num-traits",
  "rand",
  "reqwest",
@@ -123,6 +127,7 @@ dependencies = [
  "tendermint-rpc",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "unixfs-v1",
 ]
 
@@ -261,6 +266,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8824ecca2e851cec16968d54a01dd372ef8f95b244fb84b84e70128be347c3c6"
 dependencies = [
  "term",
+]
+
+[[package]]
+name = "async-stream"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd56dd203fef61ac097dd65721a419ddccb106b2d2b70ba60a6b529f03961a51"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -5843,16 +5870,15 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.10"
+version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5419f34732d9eb6ee4c3578b7989078579b7f039cbbb9ca2c4da015749371e15"
+checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
 dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
  "pin-project-lite",
  "tokio",
- "tracing",
 ]
 
 [[package]]

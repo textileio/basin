@@ -98,7 +98,7 @@ struct TransferArgs {
 
 /// Account commmands handler.
 pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> {
-    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None)?;
+    let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
     let subnet_id = get_subnet_id(&cli)?;
 
     match &args.command {
@@ -107,8 +107,8 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             let pk = sk.public_key().serialize();
             let address = Address::from(EthAddress::new_secp256k1(&pk)?);
             let eth_address = get_delegated_address(address)?;
-
             let sk_hex = hex::encode(sk.serialize());
+
             print_json(
                 &json!({"private_key": sk_hex, "address": eth_address, "fvm_address": address.to_string()}),
             )
