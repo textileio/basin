@@ -29,15 +29,17 @@
 
 > [!CAUTION]
 > Data may be **deleted every two weeks**! The ADM is currently an alpha testnet, and the network is subject to change
-> biweekly with rolling updates. Please be aware that the network may be reset at any time. A more stable testnet will be
-> released in the future that won't have this limitation.
+> biweekly with rolling updates. Please be aware that the network may be reset at any time. A more stable testnet will
+> be released in the future that won't have this limitation.
 
 ## Background
 
 The Amazing Data Machine (ADM) is a decentralized data layer, enabled by subnets that are purpose built for onchain data
-storage. Its built on top of the Filecoin Virtual Machine (FVM) and provides a horizontally scalable, verifiable, and
-cost effective data availability layer for onchain applications, networks (e.g., DePINs), and services. The first _data
-Layer 2 (L2)_. A handful of specialized "machines" (network-recognized actors) for object storage and data anchoring
+storage.
+It's built on top of the Filecoin Virtual Machine (FVM) and provides a horizontally scalable, verifiable, and
+cost-effective data availability layer for onchain applications, networks (e.g., DePINs), and services.
+The first _data Layer 2 (L2)_.
+A handful of specialized "machines" (network-recognized actors) for object storage and data anchoring
 power the ADM's featured data services.
 
 ### Architecture
@@ -82,7 +84,7 @@ securely replicated by the CometBFT consensus engine. The "++" in ABCI++ refers 
 CometBFT enables compared to the original ABCI, which helps improve the overall scalability and feature surface area.
 
 Fendermint is a specialized ABCI++ interface to the Filecoin Virtual Machines (FVM) and Ethereum-compatible FEVM. It
-exposes FEVM/FVM-specific functionality within subnets, allowing the ADM subnets behave like Filecoin but with custom
+exposes FEVM/FVM-specific functionality within subnets, allowing the ADM subnets to behave like Filecoin but with custom
 parameters to greatly improve throughput and features. Fendermint is also a standalone process that includes:
 
 - **Interpreters:** Responsible for handling commands from CometBFT.
@@ -117,7 +119,7 @@ then finally during execution of this transaction, the object is marked as `reso
 
 ### Actors (smart contracts)
 
-The ADM's core functionality is enabled with with series of core actors, which are synonymous to smart contracts that
+The ADM's core functionality is enabled with series of core actors, which are synonymous with smart contracts that
 run on the FVM and are used to manage, query, and update the state of the subnet. The FVM is responsible for executing
 the logic of the ADM protocol, including processing transactions, updating account balances, and managing the state of
 the network. There are three primary actors in the ADM:
@@ -144,15 +146,15 @@ which allow users to store and retrieve data from the store.
 
 Internally, the state of an object store is represented as
 an [IPLD-based HAMT](ipns://ipld.io/specs/advanced-data-layouts/hamt/spec/) (hash array mapped trie). The IPLD data
-model provides a flexible and extensible way to represent complex data structures, and the invariants and mutation rules
-enforced by the IPLD HAMT provides the ability to maintain canonical forms given any set of keys and their values,
+model provides a flexible and extensible way to represent complex data structures. The invariants and mutation rules
+enforced by the IPLD HAMT provide the ability to maintain canonical forms given any set of keys and their values,
 regardless of insertion order and intermediate data insertion and deletion. Therefore, for any given set of keys and
 their values, you get a consistent object store configuration, such that the root node will always produce the same
 content identifier (CID).
 
 #### Accumulator
 
-The accumulator actors lets you use an append-only Merkle tree that summarizes the underlying data by a single `root`.
+The accumulator actors let you use an append-only Merkle tree that summarizes the underlying data by a single `root`.
 As you push new data to the accumulator, you can retrieve the underlying data at a `leaf` or other relevant data
 structure components like `peaks` and total `count`. Similar to the object store actor, the accumulator stores a CID
 summary in its onchain state.
@@ -200,7 +202,7 @@ The ADM comes with both a CLI and Rust SDK network interfaces. You can find deta
 below:
 
 - CLI: [here](./cli/README.md)
-- SDK: [here](sdk/examples/README.mdADME.md)
+- SDK: [here](sdk/examples/README.md)
 
 ### Chain RPCs & funds
 
@@ -214,8 +216,8 @@ found [here](https://chainlist.org/?search=filecoin&testnets=true).
 There are a couple of limitations and behaviors to be aware of:
 
 - The maximum size for a single object is 1 GiB.
-- Objects that are less than or equal to 1024 bytes are "internal" object that get stored fully onchain.
-- Objects that are greater than 1024 bytes are "external" objects that get stored offchain and resolved at a CID.
+- Objects that are less than or equal to 1024 bytes are "on-chain" objects that get stored fully onchain.
+- Objects that are greater than 1024 bytes are "detached" objects that get stored offchain and resolved at a CID.
 - The current throughput of the ADM is hundreds of transactions per second (TPS) (note: this is a rough estimate and may
   vary based on network conditions, but the design is being further optimized).
 
@@ -225,7 +227,7 @@ When developing against a local network, be sure to set the `--network` (or `NET
 have a local-only setup running, provided by the [`ipc`](https://github.com/amazingdatamachine/ipc) repo and custom
 actors in [`builtin-actors`](https://github.com/amazingdatamachine/builtin-actors).
 
-All of the available commands include:
+All the available commands include:
 
 - Build all crates: `make build`
 - Install the CLI: `make install`

@@ -56,11 +56,11 @@ All data is signed onchain as transactions, so you'll need to set up an account 
 network. For example, any EVM-compatible wallet will work, or you can run the `adm account create` command to create a
 private key for you.
 
-Then, make sure your account is funded with FIL so you can pay to execute a transaction (you can use the
+Then, make sure your account is funded with FIL, so you can pay to execute a transaction (you can use the
 faucet [here](https://faucet.calibnet.chainsafe-fil.io/funds.html)). When you `deposit` funds from the parent (Filecoin
 Calibration) to the child subnet, it will register your account on the subnet. If you ever want to move funds back to
-the parent, the `withdraw` command can be used. Note these differ from moving funds intra-subnet, which requires you use
-the `transfer` command. These are described in more detail below.
+the parent, the `withdraw` command can be used. Note these differ from moving funds intra-subnet, which requires you
+to use the `transfer` command. These are described in more detail below.
 
 ## Usage
 
@@ -89,8 +89,9 @@ There are two flags required for the majority of the `adm` subcommands:
   or `devnet`.
 - `--private-key`: A wallet private key (ECDSA, secp256k1) for signing transactions.
 
-As a best practice, you should create a `.env` file with the following and run `source .env` to ensure these variable
-are loaded by the commands. The default network is `testnet`, so it's not necessary to set the variable unless you're
+As a best practice, you should create a `.env` file with the following and run `source .env` to ensure the commands
+load these variables.
+The default network is `testnet`, so it's not necessary to set the variable unless you're
 developing locally (`devnet`).
 
 ```
@@ -98,10 +99,10 @@ PRIVATE_KEY=your_private_key
 NETWORK=testnet
 ```
 
-Each of the following sections include examples that presume you've completed this setup step. Thus, the `--private-key`
-and `--network` flags will not be shown in most demonstrations.
+Each of the following sections includes examples that presume you've completed this setup step.
+Thus, the `--private-key` and `--network` flags will not be shown in most demonstrations.
 
-One small note on all of the getter methods and the `--height` flag:
+One small note on all the getter methods and the `--height` flag:
 
 - By default, it uses the latest `committed` block on the network.
 - You can also specify `pending` including any pending state changes
@@ -112,7 +113,7 @@ modes are also possible.
 
 ### Global options
 
-All of the global flags can also be passed as all-caps, snake case environment variables (
+All the global flags can also be passed as all-caps, snake case environment variables (
 e.g., `--rpc-url` => `RPC_URL`) that are set and sourced in a `.env` file.
 
 | Flag              | Description                                                                                |
@@ -154,7 +155,7 @@ Create a new account from a random seed.
 adm account create
 ```
 
-This commands logs a JSON object to stdout with three properties: the private key, public key, and its corresponding
+This command logs a JSON object to stdout with three properties: the private key, public key, and its corresponding
 FVM-converted address.
 
 **Example:**
@@ -171,7 +172,7 @@ Create a new private key:
 }
 ```
 
-- Optionally, pipe its output into a file to store the key adn metadata:
+- Optionally, pipe its output into a file to store the key and metadata:
 
 ```
 > adm account create > account.json
@@ -273,8 +274,9 @@ format.
 - `adm account sequence --private-key <PRIVATE_KEY>`: Query with a private key (e.g., read from your `.env` file).
 - `adm account sequence --address <ADDRESS>`: Query a `t410` or `0x` address.
 
-The `--parent` flag allows you to get the balance of the parent. If the `--network` flag is set, it will handle all of
-the required `--evm-...` flag presets for you, but you _can_ override them with your own values.
+The `--parent` flag allows you to get the balance of the parent.
+If the `--network` flag is set, it will handle all the required `--evm-...` flag presets for you,
+but you _can_ override them with your own values.
 
 | Flag                   | Required?                | Description                                                           |
 |------------------------|--------------------------|-----------------------------------------------------------------------|
@@ -326,7 +328,7 @@ adm account deposit [--to <TO>] <AMOUNT>
 ```
 
 Think of the `deposit` command as a typical transfer but _only_ from a parent to a child subnet. Both a transfer _out
-of_ as well as _within_ a subnet are handled differently.
+of_ and _within_ a subnet are handled differently.
 
 | Positionals | Description                      |
 |-------------|----------------------------------|
@@ -334,7 +336,7 @@ of_ as well as _within_ a subnet are handled differently.
 
 Optionally, you can pass the `--to` flag to deposit funds from the parent to a specific address on the child, but if you
 don't, the funds will be deposited to the address corresponding to the provided private key. If the `--network` flag is
-set, it will handle all of the required `--evm-...` flag presets for you, but you _can_ override them with your own
+set, it will handle all the required `--evm-...` flag presets for you, but you _can_ override them with your own
 values.
 
 | Flag                   | Required? | Description                                                                       |
@@ -411,7 +413,7 @@ subnet to its parent.
 
 Optionally, you can pass the `--to` flag to withdraw subnet funds to a specific address on the parent, but if you don't,
 the funds will be withdrawn to the address corresponding to the provided private key. If the `--network` flag is set, it
-will handle all of the required `--evm-...` flag presets for you, but you _can_ override them with your own values.
+will handle all the required `--evm-...` flag presets for you, but you _can_ override them with your own values.
 
 | Flag                   | Required? | Description                                                                       |
 |------------------------|-----------|-----------------------------------------------------------------------------------|
@@ -468,7 +470,7 @@ adm account transfer --to <TO> <AMOUNT>
 | `<AMOUNT>`  | The amount to transfer (in FIL). |
 
 The `--to` flag is the destination address within the subnet that you want to send funds to. If the `--network` flag is
-set, it will handle all of the required `--evm-...` flag presets for you, but you _can_ override them with your own
+set, it will handle all the required `--evm-...` flag presets for you, but you _can_ override them with your own
 values.
 
 | Flag                   | Required? | Description                                                     |
@@ -645,7 +647,7 @@ Query machines by:
 --address t410fjvjinwatc7rijtjxps4ywr4fkk56mqnolzpcnrq
 ```
 
-- At a specific block height (note how at this older height, there were less machines created than the most
+- At a specific block height (note how at this older height, there were fewer machines created than the most
   recent `committed` height above):
 
 ```
@@ -712,7 +714,7 @@ The `INPUT` can be a file path or piped from stdin.
 
 #### Get an object
 
-Gets an object from the object store machine.
+Get an object from the object store machine.
 
 ```
 adm objectstore get --address <ADDRESS> <KEY>
@@ -815,10 +817,11 @@ Query across all objects in the store.
 adm objectstore query --address <ADDRESS>
 ```
 
-Performing a `query` lists all keys that match a given prefix _up to and including the delimiter_. If a delimiter is
-supplied by the key, then the results stop there—essentially, listing sub-folders but none lower. Think of it as you
-would listing files in a directory. If you list the contents of a folder, you'll see all sub-folders, but you won't see
-the contents of one of those sub-folder.
+Performing a `query` lists all keys that match a given prefix _up to and including the delimiter_.
+If the key supplies a delimiter, then the results stop there—essentially, listing subfolders, but none lower.
+Think of it as you would when listing files in a directory.
+If you list the contents of a folder, you'll see all subfolders,
+but you won't see the contents of one of those subfolders.
 
 For example, if you have the keys `my/object`, `my/data`, and `my/object/child`, and you query for the prefix `my/`, you
 will get the objects at `my/object` and `my/data` but not `my/object/child` since its "nested" under the
@@ -886,8 +889,8 @@ prefix `my/object/` (note: inclusive of the `/` at the end).
 > You can see the `my/object` object's `kind` is `internal` (shown with its `size` in bytes), and `my/data`
 > object's `kind` is `external`. The `external` kind means it's a "detached" object that isn't stored fully onchain but
 > externally on IPFS. That is, only the CID is stored onchain, but differs from `internal`'s onchain object storage. Any
-> objects over 1 KB (1024 bytes) are considered `external`. Also, the `resolved` flag indicates whether the reference has
-> been resolved or not by nodes on the network.
+> objects over 1 KB (1024 bytes) are considered `external`. Also, the `resolved` flag indicates whether the reference
+> has been resolved or not by nodes on the network.
 
 - Get all objects and "ignore" the delimiter. Here, an arbitrary `"*"` symbol is used as the delimiter; it's been chosen
   since it doesn't exist in the example's keys that are used. Thus, this effectively lists all objects in the store
@@ -1107,7 +1110,7 @@ adm machine accumulator leaf --address <ADDRESS> <INDEX>
 
 #### Get count
 
-Get the leaf count at a given height.
+Get the leaf counts at a given height.
 
 ```
 adm machine accumulator count --address <ADDRESS>
@@ -1160,7 +1163,7 @@ adm machine accumulator peaks --address <ADDRESS>
 
 **Examples:**
 
-- Since there are only two leaves, there is only one peaks since it's a balanced tree:
+- Since there are only two leaves, there is only one peak since it's a balanced tree:
 
 ```
 > adm machine accumulator peaks \
@@ -1173,7 +1176,7 @@ adm machine accumulator peaks --address <ADDRESS>
 }
 ```
 
-- Pushing another piece of data (i.e., 3 total) leads to another peak:
+- Pushing another piece of data (i.e., three total) leads to another peak:
 
 ```
 > echo '{"hello":"basin"}' | adm machine accumulator push \

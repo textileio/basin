@@ -1,6 +1,6 @@
 # SDK Examples
 
-Welcome to the SDK examples! These demonstrate `adm`'s functionality and explain how to use it.
+Explore ADM's functionalities through these practical examples.
 
 All the examples target an `adm` testnet subnet anchored to the Filecoin Calibration network.
 You can run them with `cargo run --example [example name] - [ARG]`.
