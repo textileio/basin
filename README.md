@@ -3,9 +3,7 @@
 [![License](https://img.shields.io/github/license/amazingdatamachine/adm.svg)](./LICENSE)
 [![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg)](https://github.com/RichardLitt/standard-readme)
 
-> Basin network interfaces & tooling for scalable subnets & onchain data storage.
-
-_Note_: Basin is referred to by our codename "ADM" throughout this repo.
+> ADM network interfaces & tooling for scalable subnets & onchain data storage.
 
 ## Table of Contents
 
@@ -36,7 +34,7 @@ _Note_: Basin is referred to by our codename "ADM" throughout this repo.
 
 ## Background
 
-Basin (referred to as the ADM throughout this repo) is a decentralized data layer, enabled by subnets that are purpose built for onchain data storage.
+ADM is a decentralized data layer, enabled by subnets that are purpose built for onchain data storage.
 It is built on top of the Filecoin Virtual Machine (FVM) and provides a horizontally scalable, verifiable, and
 cost-effective data availability layer for onchain applications, networks (e.g., DePINs), and services.
 The first _data Layer 2 (L2)_.
@@ -50,7 +48,7 @@ blockchain scaling solution and architectural design that is an alternative to e
 based on the design principles of on-demand horizontal scaling.
 
 <p align="center">
-  <img src="./img/architecture.png" alt="Basin Architecture" width="500">
+  <img src="./img/architecture.png" alt="ADM Architecture" width="500">
 </p>
 
 #### IPC & subnets
@@ -124,7 +122,7 @@ then finally during execution of this transaction, the object is marked as `reso
 
 ### Machines (smart contracts)
 
-The ADM's core functionality is enabled with series of data machines, which are synonymous with smart contracts or
+The ADM's core functionality is enabled with a series of data machines, which are synonymous with smart contracts or
 "actors" that run on the FVM and are used to manage, query, and update the state of the subnet. The FVM is responsible
 for executing the logic of the ADM protocol, including processing transactions, updating account balances, and managing
 the state of the network. There are three primary machines in the ADM:
@@ -133,7 +131,8 @@ the state of the network. There are three primary machines in the ADM:
 - Object store machines
 - Accumulator machines
 
-The FVM executes messages in WASM over machine state and uses the [Wasmtime](https://github.com/bytecodealliance/wasmtime)
+The FVM executes messages in WASM over machine state and uses
+the [Wasmtime](https://github.com/bytecodealliance/wasmtime)
 runtime, and this includes a WASM implementation of the EVM bytecode interpreter. Under the hood, any "built-in" and
 "custom" (unique / subnet-specific) smart contracts are compiled to CAR files and provided to the subnet during genesis.
 
@@ -147,7 +146,8 @@ address, which is used to identify the machine on the network.
 
 These are key-value stores that allow you to push and retrieve data in a familiar S3-like fashion.
 Object stores support byte range requests and advanced queries based on key prefix, delimiter, offset, and limit.
-The object store machine provides a set of methods for interacting with the store, including `put`, `get`, and `delete`, which allow users to store and retrieve data from the store.
+The object store machine provides a set of methods for interacting with the store, including `put`, `get`, and `delete`,
+which allow users to store and retrieve data from the store.
 
 Internally, the state of an object store is represented as
 an [IPLD-based HAMT](ipns://ipld.io/specs/advanced-data-layouts/hamt/spec/) (hash array mapped trie). The IPLD data
@@ -182,11 +182,12 @@ be used interchangeably on Filecoin and all ADM subnets.
 
 ### Access control
 
-Currently, there are two types of write access controls: only-owner or public access. For example, you can create an
-object store that you, and _only_ you can write to — gated by signatures from your private key. Or, you can have "allow
-all" access where anyone can write data.
+Currently, there are two types of write-access controls: only-owner or public access.
+For example, you can create an object store that you,
+and _only_ you can write to — gated by signatures from your private key.
+Or, you can have "allow all" access where anyone can write data.
 
-This is being further refined, and there will be more robust access control mechanisms in the near future.
+This is being further refined, and there will be more robust access control mechanisms soon.
 
 ### Broadcast modes
 
@@ -201,11 +202,11 @@ Here's a quick overview of each:
 
 ## Usage
 
-The ADM comes with both a CLI and Rust SDK that expose the core network interfaces. You can find detailed instructions for each of these
-in their respective subdirectories:
+The ADM comes with both a CLI and Rust SDK that expose the core network interfaces.
+You can find detailed instructions for each of these in their respective subdirectories:
 
 - CLI: [here](./cli/README.md)
-- SDK: [here](sdk/examples/README.md)
+- SDK: [here](./sdk/examples/README.md)
 
 ### Chain RPCs & funds
 

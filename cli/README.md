@@ -5,9 +5,9 @@
 
 > The Amazing Data Machine (ADM) CLI
 
+<!-- omit from toc -->
 ## Table of Contents
 
-- [Table of Contents](#table-of-contents)
 - [Background](#background)
   - [Prerequisites](#prerequisites)
 - [Usage](#usage)
@@ -47,7 +47,7 @@
 The ADM CLI is a tool for managing your account and data machines.
 
 - _Machine manager_:
-  This singleton machine is responsible for creatingnew object stores and/or accumulators.
+  This singleton machine is responsible for creating new object stores and/or accumulators.
 - _Object store machines_:
   These are key-value stores that allow you to push and retrieve data in a familiar S3-like fashion.
   Object stores support byte range requests and advanced queries based on key prefix, delimiter, offset, and
@@ -81,7 +81,6 @@ To install the CLI, you'll need to download it from source, build, and install i
 ```sh
 git clone https://github.com/amazingdatamachine/adm
 cd adm
-make build
 make install
 ```
 
