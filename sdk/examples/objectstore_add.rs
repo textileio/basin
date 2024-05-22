@@ -74,8 +74,10 @@ async fn main() -> anyhow::Result<()> {
     sleep(Duration::from_secs(2)).await;
 
     // Query for the object
-    let mut options = QueryOptions::default();
-    options.prefix = "foo/".into();
+    let options = QueryOptions {
+        prefix: "foo/".into(),
+        ..Default::default()
+    };
     let query = machine.query(&provider, options).await?;
     if let Some(list) = query {
         for obj in list.objects {
