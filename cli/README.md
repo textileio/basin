@@ -569,7 +569,7 @@ The `objectstore` subcommand has the following subcommands:
 - `query`: Query objects in the object store.
 
 When you create objects, the `key` is a custom identifier that, by default, uses the `/` delimiter to create a key-based
-hierarchy. The value is the data you want to store, which can be a file path or piped from stdin. A best practice is to
+hierarchy. The value is the data you want to store, which can be a file path. A best practice is to
 decide on a key naming convention that makes sense for your data, such as `<namespace>/<id>` or similar. The
 hierarchical structure of the key allows for easy retrieval of data by prefixes, which is explained below (see
 the `query` subcommand).
@@ -679,7 +679,7 @@ adm objectstore add \
 [INPUT]
 ```
 
-The `INPUT` can be a file path or piped from stdin.
+The `INPUT` can be a file path.
 
 | Flag                   | Required? | Description                                                                           |
 |------------------------|-----------|---------------------------------------------------------------------------------------|
@@ -710,14 +710,6 @@ The `INPUT` can be a file path or piped from stdin.
   "gas_used": 4784697,
   "data": "bafy2bzacebnjpu5e3ushfu2weqvmtvk7vnndg4fkqsbr4zub52cyekcix7l4o"
 }
-```
-
-- Pipe from stdin:
-
-```
-> echo '{"hello":"world"}' | adm objectstore add \
---address t2weumc7otsi3kniwjgy2xnemws5jpi3vmbnxg4fa \
---key "my/object"
 ```
 
 #### Get an object
