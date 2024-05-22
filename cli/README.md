@@ -9,36 +9,36 @@
 
 - [Table of Contents](#table-of-contents)
 - [Background](#background)
-    - [Prerequisites](#prerequisites)
+  - [Prerequisites](#prerequisites)
 - [Usage](#usage)
-    - [Installation](#installation)
-    - [Configuration](#configuration)
-    - [Global options](#global-options)
-    - [Account management](#account-management)
-        - [Create an account](#create-an-account)
-        - [Get account info](#get-account-info)
-        - [Get account sequence](#get-account-sequence)
-        - [Get account balance](#get-account-balance)
-        - [Deposit funds](#deposit-funds)
-        - [Withdraw funds](#withdraw-funds)
-        - [Transfer funds](#transfer-funds)
-    - [Machine](#machine)
-        - [Get machine info](#get-machine-info)
-    - [Object store](#object-store)
-        - [Create](#create)
-        - [List object stores](#list-object-stores)
-        - [Add an object](#add-an-object)
-        - [Get an object](#get-an-object)
-        - [Delete an object](#delete-an-object)
-        - [Query objects](#query-objects)
-    - [Accumulator](#accumulator)
-        - [Create](#create-1)
-        - [List accumulators](#list-accumulators)
-        - [Push](#push)
-        - [Get leaf](#get-leaf)
-        - [Get count](#get-count)
-        - [Get peaks](#get-peaks)
-        - [Get root](#get-root)
+  - [Installation](#installation)
+  - [Configuration](#configuration)
+  - [Global options](#global-options)
+  - [Account management](#account-management)
+    - [Create an account](#create-an-account)
+    - [Get account info](#get-account-info)
+    - [Get account sequence](#get-account-sequence)
+    - [Get account balance](#get-account-balance)
+    - [Deposit funds](#deposit-funds)
+    - [Withdraw funds](#withdraw-funds)
+    - [Transfer funds](#transfer-funds)
+  - [Machine](#machine)
+    - [Get machine info](#get-machine-info)
+  - [Object store](#object-store)
+    - [Create](#create)
+    - [List object stores](#list-object-stores)
+    - [Add an object](#add-an-object)
+    - [Get an object](#get-an-object)
+    - [Delete an object](#delete-an-object)
+    - [Query objects](#query-objects)
+  - [Accumulator](#accumulator)
+    - [Create](#create-1)
+    - [List accumulators](#list-accumulators)
+    - [Push](#push)
+    - [Get leaf](#get-leaf)
+    - [Get count](#get-count)
+    - [Get peaks](#get-peaks)
+    - [Get root](#get-root)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -46,6 +46,8 @@
 
 The ADM CLI is a tool for managing your account and data machines.
 
+- _Machine manager_:
+  This singleton machine is responsible for creatingnew object stores and/or accumulators.
 - _Object store machines_:
   These are key-value stores that allow you to push and retrieve data in a familiar S3-like fashion.
   Object stores support byte range requests and advanced queries based on key prefix, delimiter, offset, and
@@ -125,7 +127,7 @@ All the global flags can also be passed as all-caps, snake case environment vari
 (e.g., `--rpc-url` => `RPC_URL`) that are set and sourced in a `.env` file.
 
 | Flag              | Description                                                                                |
-|-------------------|--------------------------------------------------------------------------------------------|
+| ----------------- | ------------------------------------------------------------------------------------------ |
 | `-n`, `--network` | Network presets for subnet and RPC: `mainnet`, `testnet`, or `devnet` (default: `testnet`) |
 | `-s`, `--subnet`  | The ID of the target subnet.                                                               |
 | `--rpc-url`       | Node CometBFT RPC URL.                                                                     |
@@ -198,7 +200,7 @@ This commands logs a JSON object to stdout: its public key, FVM address, current
 balance, and its balance on the parent subnet.
 
 | Flag                   | Required?                | Description                                                           |
-|------------------------|--------------------------|-----------------------------------------------------------------------|
+| ---------------------- | ------------------------ | --------------------------------------------------------------------- |
 | `-p, --private-key`    | Yes, if no `address`     | Wallet private key (ECDSA, secp256k1) for signing transactions.       |
 | `-a, --address`        | Yes, if no `private-key` | Account address; the signer's address is used if no address is given. |
 | `--height`             | No                       | Query at a specific block height (default: `committed`).              |
@@ -241,7 +243,7 @@ format.
 - `adm account sequence --address <ADDRESS>`: Query a `t410` or `0x` address.
 
 | Flag                | Required?                | Description                                                           |
-|---------------------|--------------------------|-----------------------------------------------------------------------|
+| ------------------- | ------------------------ | --------------------------------------------------------------------- |
 | `-p, --private-key` | Yes, if no `address`     | Wallet private key (ECDSA, secp256k1) for signing transactions.       |
 | `-a, --address`     | Yes, if no `private-key` | Account address; the signer's address is used if no address is given. |
 | `--height`          | No                       | Query at a specific block height (default: `committed`).              |
@@ -287,7 +289,7 @@ If the `--network` flag is set, it will handle all the required `--evm-...` flag
 but you _can_ override them with your own values.
 
 | Flag                   | Required?                | Description                                                           |
-|------------------------|--------------------------|-----------------------------------------------------------------------|
+| ---------------------- | ------------------------ | --------------------------------------------------------------------- |
 | `-p, --private-key`    | Yes, if no `address`     | Wallet private key (ECDSA, secp256k1) for signing transactions.       |
 | `-a, --address`        | Yes, if no `private-key` | Account address; the signer's address is used if no address is given. |
 | `--parent`             | No                       | Fetch the balance at the parent subnet (boolean flag).                |
@@ -339,7 +341,7 @@ Think of the `deposit` command as a typical transfer but _only_ from a parent to
 of_ and _within_ a subnet are handled differently.
 
 | Positionals | Description                      |
-|-------------|----------------------------------|
+| ----------- | -------------------------------- |
 | `<AMOUNT>`  | The amount to transfer (in FIL). |
 
 Optionally, you can pass the `--to` flag to deposit funds from the parent to a specific address on the child, but if you
@@ -348,7 +350,7 @@ set, it will handle all the required `--evm-...` flag presets for you, but you _
 values.
 
 | Flag                   | Required? | Description                                                                       |
-|------------------------|-----------|-----------------------------------------------------------------------------------|
+| ---------------------- | --------- | --------------------------------------------------------------------------------- |
 | `-p, --private-key`    | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions.                   |
 | `--to <TO>`            | No        | The recipient account address (if not present, defaults to the signer's address). |
 | `--evm-rpc-api`        | No        | The Ethereum API RPC HTTP endpoint.                                               |
@@ -416,7 +418,7 @@ The `withdraw` command is the opposite of a `deposit`. It's somewhat like a typi
 subnet to its parent.
 
 | Positionals | Description                      |
-|-------------|----------------------------------|
+| ----------- | -------------------------------- |
 | `<AMOUNT>`  | The amount to transfer (in FIL). |
 
 Optionally, you can pass the `--to` flag to withdraw subnet funds to a specific address on the parent, but if you don't,
@@ -424,7 +426,7 @@ the funds will be withdrawn to the address corresponding to the provided private
 will handle all the required `--evm-...` flag presets for you, but you _can_ override them with your own values.
 
 | Flag                   | Required? | Description                                                                       |
-|------------------------|-----------|-----------------------------------------------------------------------------------|
+| ---------------------- | --------- | --------------------------------------------------------------------------------- |
 | `-p, --private-key`    | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions.                   |
 | `--to <TO>`            | No        | The recipient account address (if not present, defaults to the signer's address). |
 | `--evm-rpc-api`        | No        | The Ethereum API RPC HTTP endpoint.                                               |
@@ -474,7 +476,7 @@ adm account transfer --to <TO> <AMOUNT>
 ```
 
 | Positionals | Description                      |
-|-------------|----------------------------------|
+| ----------- | -------------------------------- |
 | `<AMOUNT>`  | The amount to transfer (in FIL). |
 
 The `--to` flag is the destination address within the subnet that you want to send funds to. If the `--network` flag is
@@ -482,7 +484,7 @@ set, it will handle all the required `--evm-...` flag presets for you, but you _
 values.
 
 | Flag                   | Required? | Description                                                     |
-|------------------------|-----------|-----------------------------------------------------------------|
+| ---------------------- | --------- | --------------------------------------------------------------- |
 | `-p, --private-key`    | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions. |
 | `--to <TO>`            | Yes       | The recipient account address.                                  |
 | `--evm-rpc-api`        | No        | The Ethereum API RPC HTTP endpoint.                             |
@@ -532,11 +534,11 @@ adm machine info <ADDRESS>
 ```
 
 | Positionals | Description      |
-|-------------|------------------|
+| ----------- | ---------------- |
 | `<ADDRESS>` | Machine address. |
 
 | Flag       | Required? | Description                                              |
-|------------|-----------|----------------------------------------------------------|
+| ---------- | --------- | -------------------------------------------------------- |
 | `--height` | No        | Query at a specific block height (default: `committed`). |
 
 **Example:**
@@ -583,7 +585,7 @@ adm objectstore create
 ```
 
 | Flag                | Required? | Description                                                               |
-|---------------------|-----------|---------------------------------------------------------------------------|
+| ------------------- | --------- | ------------------------------------------------------------------------- |
 | `-p, --private-key` | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions.           |
 | `--public-write`    | No        | Allow **_public, open_** write access to the object store.                |
 | `--gas-limit`       | No        | Gas limit for the transaction.                                            |
@@ -621,7 +623,7 @@ format.
 - `adm objectstore list --address <ADDRESS>`: Query a `t410` or `0x` address.
 
 | Flag                | Required?                | Description                                                           |
-|---------------------|--------------------------|-----------------------------------------------------------------------|
+| ------------------- | ------------------------ | --------------------------------------------------------------------- |
 | `-p, --private-key` | Yes, if no `address`     | Wallet private key (ECDSA, secp256k1) for signing transactions.       |
 | `-a, --address`     | Yes, if no `private-key` | Account address; the signer's address is used if no address is given. |
 | `--height`          | No                       | Query at a specific block height (default: `committed`).              |
@@ -682,7 +684,7 @@ adm objectstore add \
 The `INPUT` can be a file path or piped from stdin.
 
 | Flag                   | Required? | Description                                                                           |
-|------------------------|-----------|---------------------------------------------------------------------------------------|
+| ---------------------- | --------- | ------------------------------------------------------------------------------------- |
 | `-p, --private-key`    | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions.                       |
 | `-a, --address`        | Yes       | Object store machine address.                                                         |
 | `-k, --key`            | Yes       | Key of the object to upload.                                                          |
@@ -729,13 +731,13 @@ adm objectstore get --address <ADDRESS> <KEY>
 ```
 
 | Positionals | Description               |
-|-------------|---------------------------|
+| ----------- | ------------------------- |
 | `<KEY>`     | Key of the object to get. |
 
 Note that when you retrieve the object, it will be written to stdout.
 
 | Flag               | Required? | Description                                                                                                   |
-|--------------------|-----------|---------------------------------------------------------------------------------------------------------------|
+| ------------------ | --------- | ------------------------------------------------------------------------------------------------------------- |
 | `-a, --address`    | Yes       | Object store machine address.                                                                                 |
 | `--object-api-url` | No        | Node Object API URL.                                                                                          |
 | `--range`          | No        | Range of bytes to get from the object (format: `"start-end"`; inclusive). Example: "0-99" => first 100 bytes. |
@@ -783,13 +785,13 @@ adm objectstore delete \
 ```
 
 | Positionals | Description               |
-|-------------|---------------------------|
+| ----------- | ------------------------- |
 | `<KEY>`     | Key of the object to get. |
 
 Similar to when you `add` an object, you can specify gas settings or alter the broadcast mode.
 
 | Flag                   | Required? | Description                                                                           |
-|------------------------|-----------|---------------------------------------------------------------------------------------|
+| ---------------------- | --------- | ------------------------------------------------------------------------------------- |
 | `-p, --private-key`    | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions.                       |
 | `-a, --address`        | Yes       | Object store machine address.                                                         |
 | `--object-api-url`     | No        | Node Object API URL.                                                                  |
@@ -836,7 +838,7 @@ will get the objects at `my/object` and `my/data` but not `my/object/child` sinc
 prefix `my/object/` (note: inclusive of the `/` at the end).
 
 | Flag              | Required? | Description                                                                        |
-|-------------------|-----------|------------------------------------------------------------------------------------|
+| ----------------- | --------- | ---------------------------------------------------------------------------------- |
 | `-a, --address`   | Yes       | Object store machine address.                                                      |
 | `-p, --prefix`    | No        | The prefix to filter objects by (defaults to empty string).                        |
 | `-d, --delimiter` | No        | The delimiter used to define object hierarchy (default: `/`).                      |
@@ -965,7 +967,7 @@ adm machine accumulator create
 ```
 
 | Flag                | Required? | Description                                                               |
-|---------------------|-----------|---------------------------------------------------------------------------|
+| ------------------- | --------- | ------------------------------------------------------------------------- |
 | `-p, --private-key` | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions.           |
 | `--public-write`    | No        | Allow **_public, open_** write access to the object store.                |
 | `--gas-limit`       | No        | Gas limit for the transaction.                                            |
@@ -1003,7 +1005,7 @@ format.
 - `adm accumulator list --address <ADDRESS>`: Query a `t410` or `0x` address.
 
 | Flag                | Required?                | Description                                                           |
-|---------------------|--------------------------|-----------------------------------------------------------------------|
+| ------------------- | ------------------------ | --------------------------------------------------------------------- |
 | `-p, --private-key` | Yes, if no `address`     | Wallet private key (ECDSA, secp256k1) for signing transactions.       |
 | `-a, --address`     | Yes, if no `private-key` | Account address; the signer's address is used if no address is given. |
 | `--height`          | No                       | Query at a specific block height (default: `committed`).              |
@@ -1050,7 +1052,7 @@ adm machine accumulator push --address <ADDRESS> [INPUT]
 The `INPUT` can be a file path or piped from stdin.
 
 | Flag                   | Required? | Description                                                                           |
-|------------------------|-----------|---------------------------------------------------------------------------------------|
+| ---------------------- | --------- | ------------------------------------------------------------------------------------- |
 | `-p, --private-key`    | Yes       | Wallet private key (ECDSA, secp256k1) for signing transactions.                       |
 | `-a, --address`        | Yes       | Accumulator machine address.                                                          |
 | `-b, --broadcast-mode` | No        | Broadcast mode for the transaction: `commit`, `sync`, or `async` (default: `commit`). |
@@ -1096,11 +1098,11 @@ adm machine accumulator leaf --address <ADDRESS> <INDEX>
 ```
 
 | Positionals | Description |
-|-------------|-------------|
+| ----------- | ----------- |
 | `<INDEX>`   | Leaf index. |
 
 | Flag            | Required? | Description                                              |
-|-----------------|-----------|----------------------------------------------------------|
+| --------------- | --------- | -------------------------------------------------------- |
 | `-a, --address` | Yes       | Accumulator machine address.                             |
 | `--height`      | No        | Query at a specific block height (default: `committed`). |
 
@@ -1125,7 +1127,7 @@ adm machine accumulator count --address <ADDRESS>
 ```
 
 | Flag            | Required? | Description                                                                                                  |
-|-----------------|-----------|--------------------------------------------------------------------------------------------------------------|
+| --------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
 | `-a, --address` | Yes       | Accumulator machine address.                                                                                 |
 | `--height`      | No        | Query block height: `committed`, `pending`, or a specific block height (e.g., `123`) (default: `committed`). |
 
@@ -1165,7 +1167,7 @@ adm machine accumulator peaks --address <ADDRESS>
 ```
 
 | Flag            | Required? | Description                                              |
-|-----------------|-----------|----------------------------------------------------------|
+| --------------- | --------- | -------------------------------------------------------- |
 | `-a, --address` | Yes       | Accumulator machine address.                             |
 | `--height`      | No        | Query at a specific block height (default: `committed`). |
 
@@ -1210,7 +1212,7 @@ adm machine accumulator root --address <ADDRESS>
 ```
 
 | Flag            | Required? | Description                                              |
-|-----------------|-----------|----------------------------------------------------------|
+| --------------- | --------- | -------------------------------------------------------- |
 | `-a, --address` | Yes       | Accumulator machine address.                             |
 | `--height`      | No        | Query at a specific block height (default: `committed`). |
 

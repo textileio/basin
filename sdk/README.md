@@ -15,8 +15,10 @@
 
 ## Background
 
-The ADM CLI is a tool for managing your account and data machines.
+The ADM SDK is a library for managing your account and data machines.
 
+- _Machine manager_:
+  This singleton machine is responsible for creatingnew object stores and/or accumulators.
 - _Object store machines_:
   These are key-value stores that allow you to push and retrieve data in a familiar S3-like fashion.
   Object stores support byte range requests and advanced queries based on key prefix, delimiter, offset, and
@@ -69,6 +71,7 @@ adm_sdk = { git = "https://github.com/textileio/basin.git" }
 > [!NOTE]
 > To use this crate in another crate, include this patch
 > for [`merkle-tree-rs`](https://github.com/consensus-shipyard/merkle-tree-rs) in your `Cargo.toml`.
+>
 > ```toml
 > [patch.crates-io]
 > # Contains some API changes that the upstream has not merged.
