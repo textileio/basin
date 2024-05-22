@@ -63,6 +63,8 @@ Example output:
 Balance of 0x9c094a4a1376d24cb83667567dec2d6b2ba4944e: 1.0
 ```
 
+Read the docs (run `make doc` from the repo root) for more account methods.
+
 ### Object storage
 
 [`objectstore_add.rs`](objectstore_add.rs) creates a new object store, adds an object, and then queries for it by key.
@@ -82,7 +84,7 @@ Transaction hash: 0xC49C5E0FBC62774C0A3C4AD24D4151D996F8BC9168C369A1A67D9049DA0A
 Query result cid: bafybeidm37d6cxxoyu5fpadpuycta2wenno6ogmzi7uh3gsfd4e4c6tyda (key=foo/my_file; detached; resolved=true)
 ```
 
-See the docs for more object store methods.
+Read the docs (run `make doc` from the repo root) for more object store methods.
 
 ### Accumulators
 
@@ -106,4 +108,4 @@ Count: 1
 State root: bafy2bzacecqsdwyjka2novzw77zex3mumho7r7q6ddcx7vgzy75fe5zqsbkxo
 ```
 
-See the docs for more accumulator methods.
+Read the docs (run `make doc` from the repo root) for more accumulator methods.

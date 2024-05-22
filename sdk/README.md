@@ -5,10 +5,11 @@
 
 > The Amazing Data Machine (ADM) SDK
 
+<!-- omit from toc -->
 ## Table of Contents
 
-- [Table of Contents](#table-of-contents)
 - [Background](#background)
+  - [Prerequisites](#prerequisites)
 - [Usage](#usage)
 - [Contributing](#contributing)
 - [License](#license)
@@ -18,7 +19,7 @@
 The ADM SDK is a library for managing your account and data machines.
 
 - _Machine manager_:
-  This singleton machine is responsible for creatingnew object stores and/or accumulators.
+  This singleton machine is responsible for creating new object stores and/or accumulators.
 - _Object store machines_:
   These are key-value stores that allow you to push and retrieve data in a familiar S3-like fashion.
   Object stores support byte range requests and advanced queries based on key prefix, delimiter, offset, and
@@ -65,7 +66,7 @@ The `adm` crates haven't been published yet, but you can use `adm_sdk` as a git 
 
 ```toml
 [dependencies]
-adm_sdk = { git = "https://github.com/textileio/basin.git" }
+adm_sdk = { git = "https://github.com/amazingdatamachine/adm.git" }
 ```
 
 > [!NOTE]
