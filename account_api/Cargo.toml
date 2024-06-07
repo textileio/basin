@@ -1,0 +1,31 @@
+[package]
+name = "account_api"
+description = "A daemon to fund new accounts for subnet registration."
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+keywords.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "account_api"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+dotenv = { workspace = true }
+ethers = { workspace = true }
+fvm_shared = { workspace = true }
+ipc-api = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+warp = { workspace = true }
+
+adm_sdk = { path = "../sdk" }
+adm_signer = { path = "../signer" }
+adm_provider = { path = "../provider" }

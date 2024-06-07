@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "provider", "sdk", "signer"]
+members = ["account_api", "cli", "provider", "sdk", "signer"]
 resolver = "2"
 
 [workspace.package]
@@ -33,6 +33,7 @@ clap = { version = "4.1.14", features = [
 ] }
 clap-stdin = { version = "0.4.0", features = ["tokio"] }
 console = "0.15.8"
+dotenv = "0.15.0"
 ethers = "2.0.14"
 ethers-contract = "2.0.14"
 fnv = "1.0"
@@ -55,6 +56,7 @@ tokio-stream = "0.1.0"
 tracing = "0.1.40"
 unixfs-v1 = { git = "https://github.com/ipfs-rust/unixfsv1", branch = "master" }
 rand = "0.8.4"
+warp = "0.3.7"
 
 # Using the same tendermint-rs dependency as tower-abci. From both we are interested in v037 modules.
 tendermint = { version = "0.31.1", features = ["secp256k1"] }
