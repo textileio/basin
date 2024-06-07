@@ -3,7 +3,6 @@
 
 use async_trait::async_trait;
 use fvm_shared::address::Address;
-use tokio::io::AsyncWrite;
 
 use crate::response::Cid;
 
@@ -20,14 +19,14 @@ pub trait ObjectProvider: Send + Sync {
     ) -> anyhow::Result<Cid>;
 
     /// Download an object.
-    async fn download<W>(
+    async fn download(
         &self,
         address: Address,
         key: &str,
         range: Option<String>,
         height: u64,
-        writer: W,
-    ) -> anyhow::Result<()>
-    where
-        W: AsyncWrite + Unpin + Send + 'static;
+    ) -> anyhow::Result<reqwest::Response>;
+
+    /// Gets the object size.
+    async fn size(&self, address: Address, key: &str, height: u64) -> anyhow::Result<usize>;
 }

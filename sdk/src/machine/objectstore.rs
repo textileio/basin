@@ -487,23 +487,33 @@ impl ObjectStore {
                 if !resolved {
                     return Err(anyhow!("object is not resolved"));
                 }
-                // The `download` method is currently using /objectstore API
-                // since we have decided to keep the GET APIs intact for a while.
-                // If we decide to remove these APIs, we can move to Object API
-                // for downloading the file with CID.
-                // TODO: If detached objects had size on-chain, we could show download progress.
                 msg_bar.set_prefix("[2/2]");
-                msg_bar.set_message(format!("Downloading {}...", cid));
-                provider
-                    .download(
-                        self.address,
-                        key,
-                        options.range,
-                        options.height.into(),
-                        writer,
-                    )
+                msg_bar.set_message(format!("Downloading {}... ", cid));
+
+                let object_size = provider
+                    .size(self.address, key, options.height.into())
+                    .await?;
+                let pro_bar = bars.add(new_progress_bar(object_size));
+
+                let response = provider
+                    .download(self.address, key, options.range, options.height.into())
                     .await?;
 
+                let mut stream = response.bytes_stream();
+                let mut progress = 0;
+                while let Some(item) = stream.next().await {
+                    match item {
+                        Ok(chunk) => {
+                            writer.write_all(&chunk).await?;
+                            progress = min(progress + chunk.len(), object_size);
+                            pro_bar.set_position(progress as u64);
+                        }
+                        Err(e) => {
+                            return Err(anyhow!(e));
+                        }
+                    }
+                }
+                pro_bar.finish_and_clear();
                 msg_bar.println(format!(
                     "{} Downloaded detached object in {} (cid={})",
                     SPARKLE,

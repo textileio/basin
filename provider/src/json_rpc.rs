@@ -11,7 +11,6 @@ use fendermint_vm_message::{
     chain::ChainMessage,
     query::{FvmQuery, FvmQueryHeight},
 };
-use futures_util::StreamExt;
 use fvm_shared::address::Address;
 use reqwest::multipart::{Form, Part};
 use tendermint::abci::response::DeliverTx;
@@ -20,7 +19,6 @@ use tendermint_rpc::{
     endpoint::abci_query::AbciQuery, Client, HttpClient, Scheme, Url, WebSocketClient,
     WebSocketClientDriver, WebSocketClientUrl,
 };
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::object::ObjectProvider;
 use crate::query::QueryProvider;
@@ -184,26 +182,19 @@ where
         Ok(cid)
     }
 
-    async fn download<W>(
+    async fn download(
         &self,
         address: Address,
         key: &str,
         range: Option<String>,
         height: u64,
-        mut writer: W,
-    ) -> anyhow::Result<()>
-    where
-        W: AsyncWrite + Unpin + Send + 'static,
-    {
+    ) -> anyhow::Result<reqwest::Response> {
         let client = self
             .objects
             .clone()
             .ok_or_else(|| anyhow!("object provider is required"))?;
 
-        let url = format!(
-            "{}v1/objectstores/{}/{}?height={}",
-            client.url, address, key, height
-        );
+        let url = format!("{}v1/objects/{}/{}?height={}", client.url, address, key, height);
         let response = if let Some(range) = range {
             client
                 .inner
@@ -221,19 +212,31 @@ where
             )));
         }
 
-        let mut stream = response.bytes_stream();
-        while let Some(item) = stream.next().await {
-            match item {
-                Ok(chunk) => {
-                    writer.write_all(&chunk).await?;
-                }
-                Err(e) => {
-                    return Err(anyhow!(e));
-                }
-            }
+        Ok(response)
+    }
+
+    async fn size(&self, address: Address, key: &str, height: u64) -> anyhow::Result<usize> {
+        let client = self
+            .objects
+            .clone()
+            .ok_or_else(|| anyhow!("object provider is required"))?;
+
+        let url = format!("{}v1/objects/{}/{}?height={}", client.url, address, key, height);
+        let response = client.inner.head(url).send().await?;
+        if !response.status().is_success() {
+            return Err(anyhow!(format!(
+                "failed to get object size: {}",
+                response.text().await?
+            )));
         }
 
-        Ok(())
+        let size: usize = response
+            .headers()
+            .get("content-length")
+            .ok_or_else(|| anyhow!("missing content-length header in response for object size"))?
+            .to_str()?
+            .parse()?;
+        Ok(size)
     }
 }
 
