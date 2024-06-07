@@ -1,6 +1,6 @@
 [package]
-name = "account_api"
-description = "A daemon to fund new accounts for subnet registration."
+name = "walletd"
+description = "A daemon to register accounts on subnets by funding from an admin wallet."
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -11,7 +11,7 @@ keywords.workspace = true
 version.workspace = true
 
 [[bin]]
-name = "account_api"
+name = "walletd"
 path = "src/main.rs"
 
 [dependencies]

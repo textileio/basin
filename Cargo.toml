@@ -1,5 +1,5 @@
 [workspace]
-members = ["account_api", "cli", "provider", "sdk", "signer"]
+members = ["cli", "provider", "sdk", "signer", "walletd"]
 resolver = "2"
 
 [workspace.package]
