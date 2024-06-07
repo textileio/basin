@@ -183,3 +183,17 @@ impl Network {
         }
     }
 }
+
+impl FromStr for Network {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mainnet" => Ok(Network::Mainnet),
+            "testnet" => Ok(Network::Testnet),
+            "localnet" => Ok(Network::Localnet),
+            "devnet" => Ok(Network::Devnet),
+            _ => Err(()),
+        }
+    }
+}

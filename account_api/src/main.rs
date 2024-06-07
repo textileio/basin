@@ -6,7 +6,6 @@ use adm_sdk::{account::Account, network::Network};
 use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 use dotenv::dotenv;
 use ethers::prelude::TransactionReceipt;
-use ethers::utils::hex;
 use fvm_shared::econ::TokenAmount;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -50,13 +49,13 @@ async fn main() {
     let state = Arc::new(Mutex::new(State::new()));
 
     let register = warp::post()
-        .and(warp::path!(String / "register"))
+        .and(warp::path!(Network / "register"))
         .and(with_state(state.clone()))
         .and(warp::body::json())
         .and_then(handle_register);
 
     let fund = warp::post()
-        .and(warp::path!(String / "fund"))
+        .and(warp::path!(Network / "fund"))
         .and(with_state(state.clone()))
         .and(warp::body::json())
         .and_then(handle_fund);
@@ -67,14 +66,14 @@ async fn main() {
 }
 
 /// Get the network configuration based on the API path parameter.
-fn get_network(network: &str) -> Result<&'static Network, &'static str> {
+fn get_network(network: &Network) -> Result<&'static Network, &'static str> {
     return match network {
-        "testnet" => Ok(Network::Testnet.init()),
+        Network::Testnet => Ok(Network::Testnet.init()),
         // TODO: if a parent-child subnet setup is possible, then localnet or
         // devnet can also benefit from this API. Also, future mainnet, too.
-        // "mainnet" => Ok(Network::Mainnet.init()),
-        // "localnet" => Network::Localnet.init(),
-        // "devnet" => Network::Localnet.init(),
+        // Network::Mainnet => Ok(Network::Mainnet.init()),
+        // Network::Localnet => Network::Localnet.init(),
+        // Network::Devnet => Network::Devnet.init(),
         _ => return Err("Invalid network"),
     };
 }
@@ -103,7 +102,7 @@ fn with_state(
 // so is it worthwhile keeping, or should we just have the `fund` endpoint?
 #[allow(unused_variables)]
 async fn handle_register(
-    network: String,
+    network: Network,
     state: Arc<Mutex<State>>,
     req: AccountRequest,
 ) -> Result<impl Reply, Rejection> {
@@ -125,7 +124,7 @@ async fn handle_register(
 /// f410 address for the EVM address by sending 0 FIL to it.
 async fn register(
     address: &str,
-    network: &str,
+    network: &Network,
 ) -> anyhow::Result<TransactionReceipt, Box<dyn Error>> {
     // TODO: only `testnet` is valid, but this allows for future path params like
     // `mainnet`, `devnet`, or `localnet`
@@ -146,7 +145,7 @@ async fn register(
 /// Handles the `/<network>/fund` request.
 #[allow(unused_variables)]
 async fn handle_fund(
-    network: String,
+    network: Network,
     state: Arc<Mutex<State>>,
     req: AccountRequest,
 ) -> Result<impl warp::Reply, warp::Rejection> {
@@ -166,7 +165,10 @@ async fn handle_fund(
 
 /// Funds an account on the subnet (sends 1 FIL), thus, initializing it on both
 /// the rootnet and subnet.
-async fn fund(address: &str, network: &str) -> anyhow::Result<TransactionReceipt, Box<dyn Error>> {
+async fn fund(
+    address: &str,
+    network: &Network,
+) -> anyhow::Result<TransactionReceipt, Box<dyn Error>> {
     // TODO: only `testnet` is valid, but this allows for future path params like
     // `mainnet`, `devnet`, or `localnet`
     let net = get_network(network)?;
@@ -179,12 +181,6 @@ async fn fund(address: &str, network: &str) -> anyhow::Result<TransactionReceipt
         TokenAmount::from_whole(1),
     )
     .await?;
-
-    println!("Deposited 1 tFIL to {}", address);
-    println!(
-        "Transaction hash: 0x{}",
-        hex::encode(tx.transaction_hash.to_fixed_bytes())
-    );
 
     Ok(tx)
 }
