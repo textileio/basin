@@ -51,7 +51,7 @@ blockchain scaling solution and architectural design that is an alternative to e
 based on the design principles of on-demand horizontal scaling.
 
 <p align="center">
-  <img src="./img/architecture.png" alt="ADM Architecture" width="500">
+  <img src="./img/architecture.png" alt="ADM Architecture">
 </p>
 
 #### IPC & subnets
