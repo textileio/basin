@@ -211,7 +211,7 @@ balance, and its balance on the parent subnet.
 
 **Example:**
 
-Create a new private key, optionally, piping its output into a file:
+Get account info for a specific address:
 
 ```
 > adm account info \
