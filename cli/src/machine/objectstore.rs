@@ -331,8 +331,6 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 )
                 .await?;
 
-            // TODO: ObjectList doesn't need to return as an Option. We can change this in the actor.
-            let list = list.unwrap_or_default();
             let objects = list
                 .objects
                 .iter()

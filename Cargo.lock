@@ -1939,7 +1939,6 @@ dependencies = [
  "fvm_shared",
  "num-derive 0.3.3",
  "num-traits",
- "objectstore_actor_sdk",
  "serde",
  "serde_tuple",
 ]
@@ -3849,15 +3848,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6a622008b6e321afc04970976f62ee297fdbaa6f95318ca343e3eebb9648441"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "objectstore_actor_sdk"
-version = "0.1.0"
-dependencies = [
- "fvm_sdk",
- "fvm_shared",
- "num-traits",
 ]
 
 [[package]]

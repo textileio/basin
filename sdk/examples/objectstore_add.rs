@@ -78,24 +78,22 @@ async fn main() -> anyhow::Result<()> {
         prefix: "foo/".into(),
         ..Default::default()
     };
-    let query = machine.query(&provider, options).await?;
-    if let Some(list) = query {
-        for obj in list.objects {
-            let key = core::str::from_utf8(&obj.0).unwrap_or_default();
-            match &obj.1 {
-                ObjectListItem::Internal((cid, size)) => {
-                    println!(
-                        "Query result cid: {} (key={}; on-chain; size={})",
-                        cid, key, size
-                    );
-                }
-                ObjectListItem::External((cid, resolved)) => {
-                    // `resolved` indicates the validators were able to fetch and verify the file
-                    println!(
-                        "Query result cid: {} (key={}; detached; resolved={})",
-                        cid, key, resolved
-                    );
-                }
+    let list = machine.query(&provider, options).await?;
+    for obj in list.objects {
+        let key = core::str::from_utf8(&obj.0).unwrap_or_default();
+        match &obj.1 {
+            ObjectListItem::Internal((cid, size)) => {
+                println!(
+                    "Query result cid: {} (key={}; on-chain; size={})",
+                    cid, key, size
+                );
+            }
+            ObjectListItem::External((cid, resolved)) => {
+                // `resolved` indicates the validators were able to fetch and verify the file
+                println!(
+                    "Query result cid: {} (key={}; detached; resolved={})",
+                    cid, key, resolved
+                );
             }
         }
     }

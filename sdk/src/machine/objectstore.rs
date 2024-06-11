@@ -524,7 +524,7 @@ impl ObjectStore {
         &self,
         provider: &impl QueryProvider,
         options: QueryOptions,
-    ) -> anyhow::Result<Option<ObjectList>> {
+    ) -> anyhow::Result<ObjectList> {
         let params = fendermint_actor_objectstore::ListParams {
             prefix: options.prefix.into(),
             delimiter: options.delimiter.into(),
@@ -544,8 +544,8 @@ fn decode_get(deliver_tx: &DeliverTx) -> anyhow::Result<Option<Object>> {
         .map_err(|e| anyhow!("error parsing as Option<Object>: {e}"))
 }
 
-fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<Option<ObjectList>> {
+fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<ObjectList> {
     let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<Option<ObjectList>>(&data)
-        .map_err(|e| anyhow!("error parsing as Option<ObjectList>: {e}"))
+    fvm_ipld_encoding::from_slice::<ObjectList>(&data)
+        .map_err(|e| anyhow!("error parsing as ObjectList: {e}"))
 }
