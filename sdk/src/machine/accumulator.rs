@@ -136,10 +136,11 @@ impl Accumulator {
     ) -> anyhow::Result<Vec<u8>> {
         let params = RawBytes::serialize(index)?;
         let message = local_message(self.address, Get as u64, params);
-        let response = provider
-            .call(message, height, |tx| decode_leaf(tx, index))
-            .await?;
-        Ok(response.value)
+        let response = provider.call(message, height, |tx| decode_leaf(tx)).await?;
+        let leaf = response
+            .value
+            .ok_or_else(|| anyhow!("leaf not found for index '{}'", index))?;
+        Ok(leaf)
     }
 
     /// Get total leaf count at a given height.
@@ -183,13 +184,10 @@ fn decode_push_return(deliver_tx: &DeliverTx) -> anyhow::Result<PushReturn> {
         .map_err(|e| anyhow!("error parsing as PushReturn: {e}"))
 }
 
-fn decode_leaf(deliver_tx: &DeliverTx, index: u64) -> anyhow::Result<Vec<u8>> {
+fn decode_leaf(deliver_tx: &DeliverTx) -> anyhow::Result<Option<Vec<u8>>> {
     let data = decode_bytes(deliver_tx)?;
-    if data.is_empty() {
-        // TODO: The actor's leaf method should return an optional.
-        return Err(anyhow!("leaf not found at index '{}'", index));
-    }
-    fvm_ipld_encoding::from_slice(&data).map_err(|e| anyhow!("error parsing as Vec<u8>: {e}"))
+    fvm_ipld_encoding::from_slice(&data)
+        .map_err(|e| anyhow!("error parsing as Option<Vec<u8>>: {e}"))
 }
 
 fn decode_count(deliver_tx: &DeliverTx) -> anyhow::Result<u64> {

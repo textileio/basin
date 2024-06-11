@@ -143,18 +143,17 @@ where
 
 fn decode_create(deliver_tx: &DeliverTx) -> anyhow::Result<CreateExternalReturn> {
     let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<CreateExternalReturn>(&data)
+    fvm_ipld_encoding::from_slice(&data)
         .map_err(|e| anyhow!("error parsing as CreateExternalReturn: {e}"))
 }
 
 fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<Vec<adm::Metadata>> {
     let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<Vec<adm::Metadata>>(&data)
+    fvm_ipld_encoding::from_slice(&data)
         .map_err(|e| anyhow!("error parsing as Vec<adm::Metadata>: {e}"))
 }
 
 fn decode_info(deliver_tx: &DeliverTx) -> anyhow::Result<Metadata> {
     let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<Metadata>(&data)
-        .map_err(|e| anyhow!("error parsing as Metadata: {e}"))
+    fvm_ipld_encoding::from_slice(&data).map_err(|e| anyhow!("error parsing as Metadata: {e}"))
 }
