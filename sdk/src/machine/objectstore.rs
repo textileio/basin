@@ -494,11 +494,9 @@ impl ObjectStore {
                     .size(self.address, key, options.height.into())
                     .await?;
                 let pro_bar = bars.add(new_progress_bar(object_size));
-
                 let response = provider
                     .download(self.address, key, options.range, options.height.into())
                     .await?;
-
                 let mut stream = response.bytes_stream();
                 let mut progress = 0;
                 while let Some(item) = stream.next().await {
