@@ -55,7 +55,7 @@ pub trait QueryProvider: Send + Sync {
         mut message: Message,
         height: FvmQueryHeight,
     ) -> anyhow::Result<QueryResponse<GasEstimate>> {
-        // Using 0 sequence so estimation doesn't get tripped over by nonce mismatch.
+        // Using a sequence of 0 so estimation doesn't get tripped over by nonce mismatch.
         message.sequence = 0;
 
         let res = self
@@ -122,7 +122,7 @@ pub trait QueryProvider: Send + Sync {
     async fn query(&self, query: FvmQuery, height: FvmQueryHeight) -> anyhow::Result<AbciQuery>;
 }
 
-/// Extract some value from the query result, unless it's not found or other error.
+/// Extract some value from the query result, unless it's not found or another error.
 fn extract_opt<T, F>(res: AbciQuery, f: F) -> anyhow::Result<Option<T>>
 where
     F: FnOnce(AbciQuery) -> anyhow::Result<T>,
@@ -141,10 +141,9 @@ where
 {
     if res.code.is_err() {
         Err(anyhow!(
-            "query returned non-zero exit code: {}; info: {}; log: {}",
+            "query returned non-zero exit code: {}; {}",
             res.code.value(),
             res.info,
-            res.log
         ))
     } else {
         f(res)

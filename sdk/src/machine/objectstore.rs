@@ -548,12 +548,11 @@ impl ObjectStore {
 
 fn decode_get(deliver_tx: &DeliverTx) -> anyhow::Result<Option<Object>> {
     let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<Option<Object>>(&data)
+    fvm_ipld_encoding::from_slice(&data)
         .map_err(|e| anyhow!("error parsing as Option<Object>: {e}"))
 }
 
 fn decode_list(deliver_tx: &DeliverTx) -> anyhow::Result<ObjectList> {
     let data = decode_bytes(deliver_tx)?;
-    fvm_ipld_encoding::from_slice::<ObjectList>(&data)
-        .map_err(|e| anyhow!("error parsing as ObjectList: {e}"))
+    fvm_ipld_encoding::from_slice(&data).map_err(|e| anyhow!("error parsing as ObjectList: {e}"))
 }
