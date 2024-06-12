@@ -13,7 +13,7 @@ use adm_signer::SubnetID;
 
 use crate::ipc::subnet::EVMSubnet;
 
-const TESTNET_SUBNET_ID: &str = "/r314159/t410f7x4mh62k6oymmd3rfdjnzyjid7p2tstnbuvnc4i";
+const TESTNET_SUBNET_ID: &str = "/r314159/t410fi4rsuyf5vwwozyhqappenisztqubeykfazdkbma"; // chain ID: 2915590408227582
 const LOCALNET_SUBNET_ID: &str = "/r314159/t410f726d2jv6uj4mpkcbgg5ndlpp3l7dd5rlcpgzkoi";
 const DEVNET_SUBNET_ID: &str = "test";
 
@@ -27,8 +27,8 @@ const TESTNET_EVM_GATEWAY_ADDRESS: &str = "0x77aa40b105843728088c0132e43fc443488
 const TESTNET_EVM_REGISTRY_ADDRESS: &str = "0x74539671a1d2f1c8f200826baba665179f53a1b7";
 
 const TESTNET_PARENT_EVM_RPC_URL: &str = "https://api.calibration.node.glif.io/rpc/v1";
-const TESTNET_PARENT_EVM_GATEWAY_ADDRESS: &str = "0x728F3B71EBD1358973AbCE325Fe45f7f701ea7e6";
-const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x2f71A1d47ccc2E13E646D4C1bcF89E3409114De8";
+const TESTNET_PARENT_EVM_GATEWAY_ADDRESS: &str = "0x5bd02Cad40B17bD179869cC194Aa34F9BCC23ea7";
+const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x58037F3981DD1158C97F0504fe664aC24F1daAB3";
 
 const TESTNET_OBJECT_API_URL: &str = "https://object-api.n1.testnet.basin.storage";
 const LOCALNET_OBJECT_API_URL: &str = "http://127.0.0.1:8001";
