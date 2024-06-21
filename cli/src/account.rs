@@ -1,21 +1,28 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::time::Duration;
+
+use anyhow::anyhow;
 use clap::{Args, Subcommand};
+use ethers::prelude::TransactionReceipt;
 use fendermint_crypto::SecretKey;
 use fendermint_vm_actor_interface::eam::EthAddress;
 use fvm_shared::{address::Address, econ::TokenAmount};
-use reqwest::Url;
+use reqwest::{Client, Url};
 use serde_json::json;
-use std::time::Duration;
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
     util::{get_delegated_address, parse_address, parse_token_amount},
 };
-use adm_sdk::{account::Account, ipc::subnet::EVMSubnet};
-use adm_signer::key::random_secretkey;
-use adm_signer::{key::parse_secret_key, AccountKind, Signer, SubnetID, Void, Wallet};
+use adm_sdk::{account::Account, ipc::subnet::EVMSubnet, network::Network as SdkNetwork};
+use adm_signer::{
+    key::parse_secret_key, key::random_secretkey, AccountKind, Signer, SubnetID, Void, Wallet,
+};
+
+// TODO: update this with a public testnet endpoint
+const TESTNET_WALLET_SERVICE_API_URL: &str = "http://localhost:8081/register/";
 
 use crate::{get_address, get_rpc_url, get_subnet_id, print_json, AddressArgs, Cli};
 
@@ -29,6 +36,8 @@ pub struct AccountArgs {
 enum AccountCommands {
     /// Create a new account from a random seed.
     Create,
+    /// Register a new account on a subnet.
+    Register(RegisterArgs),
     /// Get account information.
     Info(InfoArgs),
     /// Deposit funds into a subnet from its parent.
@@ -96,7 +105,23 @@ struct TransferArgs {
     subnet: SubnetArgs,
 }
 
-/// Account commmands handler.
+#[derive(Clone, Debug, Args)]
+struct RegisterArgs {
+    /// Wallet private key (ECDSA, secp256k1) for signing transactions.
+    #[arg(short, long, env, value_parser = parse_secret_key)]
+    private_key: Option<SecretKey>,
+    /// Account address. The signer address is used if no address is given.
+    #[arg(short, long, value_parser = parse_address)]
+    address: Option<Address>,
+    /// Wallet registration URL. This sends a subnet transaction from a
+    /// sponsoring wallet to new accounts, covering gas fees.
+    #[arg(long, env)]
+    wallet_service_url: Option<Url>,
+    #[command(flatten)]
+    subnet: SubnetArgs,
+}
+
+/// Account commands handler.
 pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> {
     let provider = JsonRpcProvider::new_http(get_rpc_url(&cli)?, None, None)?;
     let subnet_id = get_subnet_id(&cli)?;
@@ -112,6 +137,42 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
             print_json(
                 &json!({"private_key": sk_hex, "address": eth_address, "fvm_address": address.to_string()}),
             )
+        }
+        AccountCommands::Register(args) => {
+            let addr_args = AddressArgs {
+                private_key: args.private_key.clone(),
+                address: args.address.clone(),
+                height: Default::default(),
+            };
+            let height = addr_args.height.clone();
+            let address = get_address(addr_args, &subnet_id)?;
+            let eth_address = get_delegated_address(address)?;
+            let eth_addr_str = format!("{:?}", eth_address);
+
+            match Account::sequence(&provider, &Void::new(address), height).await {
+                Ok(_) => {
+                    println!("account already registered");
+                    Ok(())
+                }
+                Err(_) => {
+                    let network = cli.network.get();
+                    let base_url =
+                        get_wallet_service_url(network, args.wallet_service_url.clone())?;
+                    let body = json!({
+                        "network": network.to_string(),
+                        "address": eth_addr_str
+                    });
+                    let req = Client::new()
+                        .post(base_url)
+                        .header("Content-Type", "application/json")
+                        .body(body.to_string())
+                        .send()
+                        .await?;
+                    let tx: TransactionReceipt = req.json().await?;
+
+                    print_json(&tx)
+                }
+            }
         }
         AccountCommands::Info(args) => {
             let address = get_address(args.address.clone(), &subnet_id)?;
@@ -209,4 +270,21 @@ fn get_parent_subnet_config(
         registry_addr: args.evm_registry.unwrap_or(network.parent_evm_registry()?),
         gateway_addr: args.evm_gateway.unwrap_or(network.parent_evm_gateway()?),
     })
+}
+
+/// Returns url to register subnet accounts from a sponsoring wallet. Note: only
+/// `testnet` is supported.
+fn get_wallet_service_url(network: SdkNetwork, url: Option<Url>) -> anyhow::Result<Url> {
+    match url {
+        Some(u) => Ok(u),
+        None => match network {
+            SdkNetwork::Testnet => {
+                Url::parse(TESTNET_WALLET_SERVICE_API_URL).map_err(anyhow::Error::msg)
+            }
+            SdkNetwork::Mainnet | SdkNetwork::Devnet | SdkNetwork::Localnet => Err(anyhow!(
+                "registration not supported on '{}'",
+                network.to_string()
+            )),
+        },
+    }
 }

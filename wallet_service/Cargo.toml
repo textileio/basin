@@ -1,6 +1,6 @@
 [package]
-name = "walletd"
-description = "A daemon to register accounts on subnets by funding from an admin wallet."
+name = "adm_wallet_service"
+description = "A server for registering accounts on subnets by sending transfers from an admin wallet."
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -11,7 +11,7 @@ keywords.workspace = true
 version.workspace = true
 
 [[bin]]
-name = "walletd"
+name = "adm_wallet_service"
 path = "src/main.rs"
 
 [dependencies]

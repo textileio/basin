@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "provider", "sdk", "signer", "walletd"]
+members = ["cli", "provider", "sdk", "signer", "wallet_service"]
 resolver = "2"
 
 [workspace.package]

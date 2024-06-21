@@ -1,11 +1,13 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::fmt::Display;
 use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use fvm_shared::address::{set_current_network, Address, Network as FvmNetwork};
+use fvm_shared::address::{set_current_network, Address, Error, Network as FvmNetwork};
+use serde::{Deserialize, Deserializer};
 use tendermint_rpc::Url;
 
 use adm_provider::util::parse_address;
@@ -185,7 +187,7 @@ impl Network {
 }
 
 impl FromStr for Network {
-    type Err = ();
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -193,7 +195,28 @@ impl FromStr for Network {
             "testnet" => Ok(Network::Testnet),
             "localnet" => Ok(Network::Localnet),
             "devnet" => Ok(Network::Devnet),
-            _ => Err(()),
+            _ => Err(Error::UnknownNetwork.to_string()),
         }
+    }
+}
+
+impl Display for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Network::Mainnet => write!(f, "mainnet"),
+            Network::Testnet => write!(f, "testnet"),
+            Network::Localnet => write!(f, "localnet"),
+            Network::Devnet => write!(f, "devnet"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Network {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = String::deserialize(deserializer)?;
+        Network::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
