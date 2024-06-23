@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand};
 use fendermint_actor_machine::WriteAccess;
-use fendermint_actor_objectstore::ObjectListItem;
 use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
@@ -334,16 +333,10 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
             let objects = list
                 .objects
                 .iter()
-                .map(|v| {
-                    let key = core::str::from_utf8(&v.0).unwrap_or_default().to_string();
-                    match &v.1 {
-                        ObjectListItem::Internal((cid, size)) => {
-                            json!({"key": key, "value": json!({"kind": "internal", "content": cid.to_string(), "size": size})})
-                        }
-                        ObjectListItem::External((cid, resolved)) => {
-                            json!({"key": key, "value": json!({"kind": "external", "content": cid.to_string(), "resolved": resolved})})
-                        }
-                    }
+                .map(|(key_bytes, object)| {
+                    let key = core::str::from_utf8(&key_bytes).unwrap_or_default().to_string();                    
+                    let cid = cid::Cid::try_from(object.cid.clone().0).unwrap_or_default();
+                    json!({"key": key, "value": json!({"content": cid, "resolved": object.resolved})})                    
                 })
                 .collect::<Vec<Value>>();
             let common_prefixes = list
