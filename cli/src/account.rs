@@ -16,13 +16,13 @@ use adm_provider::{
     json_rpc::JsonRpcProvider,
     util::{get_delegated_address, parse_address, parse_token_amount},
 };
-use adm_sdk::{account::Account, ipc::subnet::EVMSubnet, network::Network as SdkNetwork};
+use adm_sdk::{
+    account::Account, ipc::subnet::EVMSubnet, network::Network as SdkNetwork,
+    network::TESTNET_FAUCET_API_URL,
+};
 use adm_signer::{
     key::parse_secret_key, key::random_secretkey, AccountKind, Signer, SubnetID, Void, Wallet,
 };
-
-// TODO: update this with a public testnet endpoint
-const TESTNET_WALLET_SERVICE_API_URL: &str = "http://localhost:8081/register/";
 
 use crate::{get_address, get_rpc_url, get_subnet_id, print_json, AddressArgs, Cli};
 
@@ -116,7 +116,7 @@ struct RegisterArgs {
     /// Wallet registration URL. This sends a subnet transaction from a
     /// sponsoring wallet to new accounts, covering gas fees.
     #[arg(long, env)]
-    wallet_service_url: Option<Url>,
+    faucet_url: Option<Url>,
     #[command(flatten)]
     subnet: SubnetArgs,
 }
@@ -156,8 +156,7 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
                 }
                 Err(_) => {
                     let network = cli.network.get();
-                    let base_url =
-                        get_wallet_service_url(network, args.wallet_service_url.clone())?;
+                    let base_url = get_faucet_url(network, args.faucet_url.clone())?;
                     let body = json!({
                         "network": network.to_string(),
                         "address": eth_addr_str
@@ -274,13 +273,11 @@ fn get_parent_subnet_config(
 
 /// Returns url to register subnet accounts from a sponsoring wallet. Note: only
 /// `testnet` is supported.
-fn get_wallet_service_url(network: SdkNetwork, url: Option<Url>) -> anyhow::Result<Url> {
+fn get_faucet_url(network: SdkNetwork, url: Option<Url>) -> anyhow::Result<Url> {
     match url {
         Some(u) => Ok(u),
         None => match network {
-            SdkNetwork::Testnet => {
-                Url::parse(TESTNET_WALLET_SERVICE_API_URL).map_err(anyhow::Error::msg)
-            }
+            SdkNetwork::Testnet => Url::parse(TESTNET_FAUCET_API_URL).map_err(anyhow::Error::msg),
             SdkNetwork::Mainnet | SdkNetwork::Devnet | SdkNetwork::Localnet => Err(anyhow!(
                 "registration not supported on '{}'",
                 network.to_string()

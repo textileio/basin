@@ -61,6 +61,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "adm_faucet"
+version = "0.1.0"
+dependencies = [
+ "adm_provider",
+ "adm_sdk",
+ "adm_signer",
+ "anyhow",
+ "dotenv",
+ "ethers",
+ "fvm_shared",
+ "ipc-api",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "warp",
+]
+
+[[package]]
 name = "adm_provider"
 version = "0.1.0"
 dependencies = [
@@ -150,25 +169,6 @@ dependencies = [
  "serde_json",
  "tendermint-rpc",
  "tokio",
-]
-
-[[package]]
-name = "adm_wallet_service"
-version = "0.1.0"
-dependencies = [
- "adm_provider",
- "adm_sdk",
- "adm_signer",
- "anyhow",
- "dotenv",
- "ethers",
- "fvm_shared",
- "ipc-api",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "warp",
 ]
 
 [[package]]

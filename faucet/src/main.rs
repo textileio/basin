@@ -2,9 +2,6 @@ use std::convert::Infallible;
 use std::env;
 use std::error::Error;
 
-use adm_provider::util::parse_address;
-use adm_sdk::{account::Account, network::Network};
-use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
 use dotenv::dotenv;
 use ethers::prelude::TransactionReceipt;
 use fvm_shared::{address::Address, econ::TokenAmount};
@@ -12,14 +9,18 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
+use adm_provider::util::parse_address;
+use adm_sdk::{account::Account, network::Network};
+use adm_signer::{key::parse_secret_key, AccountKind, Wallet};
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
 
-    let admin_wallet_pk = env::var("WALLET_SERVICE_TESTNET_PRIVATE_KEY")
-        .expect("WALLET_SERVICE_TESTNET_PRIVATE_KEY not set");
+    let admin_wallet_pk =
+        env::var("FAUCET_TESTNET_PRIVATE_KEY").expect("FAUCET_TESTNET_PRIVATE_KEY not set");
 
-    let port = env::var("WALLET_SERVICE_PORT")
+    let port = env::var("FAUCET_PORT")
         .ok()
         .and_then(|port| port.parse().ok())
         .unwrap_or(8081);

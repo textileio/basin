@@ -1,6 +1,6 @@
 [package]
-name = "adm_wallet_service"
-description = "A server for registering accounts on subnets by sending transfers from an admin wallet."
+name = "adm_faucet"
+description = "A faucet service for registering new subnet accounts and sending testnet funds."
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -11,7 +11,7 @@ keywords.workspace = true
 version.workspace = true
 
 [[bin]]
-name = "adm_wallet_service"
+name = "adm_faucet"
 path = "src/main.rs"
 
 [dependencies]

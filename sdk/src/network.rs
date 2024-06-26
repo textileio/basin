@@ -35,6 +35,9 @@ const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x7Eb0a3511BB5DB2b5f945e6EB80
 const TESTNET_OBJECT_API_URL: &str = "https://object-api.n1.testnet.basin.storage";
 const LOCALNET_OBJECT_API_URL: &str = "http://127.0.0.1:8001";
 
+// TODO: update to public endpoint: https://faucet.n1.testnet.basin.storage
+pub const TESTNET_FAUCET_API_URL: &str = "http://localhost:8081/register/";
+
 /// Options for [`EVMSubnet`] configurations.
 #[derive(Debug, Clone)]
 pub struct SubnetOptions {
