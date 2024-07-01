@@ -1,0 +1,25 @@
+[package]
+name = "adm_wasm"
+description = "The top-level user interface for managing ADM object storage and state accumulators."
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+keywords.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+
+adm_sdk = { path = "../sdk" }
+
+[dev-dependencies]
+wasm-bindgen-test = { workspace = true }
+
+[profile.release]
+opt-level = "s"
