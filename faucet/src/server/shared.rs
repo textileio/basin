@@ -9,8 +9,6 @@ use adm_provider::util::parse_address;
 use adm_sdk::network::Network as SdkNetwork;
 use adm_signer::{AccountKind, Wallet};
 
-pub mod register;
-
 /// Generic base request for all routes.
 #[derive(Deserialize)]
 pub struct BaseRequest {
@@ -36,8 +34,8 @@ where
 
 /// Generic request error.
 #[derive(Clone, Debug)]
-struct BadRequest {
-    message: String,
+pub struct BadRequest {
+    pub message: String,
 }
 
 impl warp::reject::Reject for BadRequest {}

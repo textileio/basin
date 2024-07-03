@@ -10,9 +10,10 @@ use warp::{Filter, Rejection, Reply};
 
 use adm_sdk::{account::Account, network::Network as SdkNetwork};
 
-use crate::server::log_request_body;
-
-use super::{get_faucet_wallet, with_private_key, BadRequest, BaseRequest};
+use crate::server::{
+    shared::{get_faucet_wallet, with_private_key, BadRequest, BaseRequest},
+    util::log_request_body,
+};
 
 /// Register request (essentially, equivalent to [`BaseRequest`]).
 #[derive(Deserialize)]
