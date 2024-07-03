@@ -14,9 +14,15 @@ pub mod register;
 /// Generic base request for all routes.
 #[derive(Deserialize)]
 pub struct BaseRequest {
-    network: SdkNetwork,
+    pub network: SdkNetwork,
     #[serde(deserialize_with = "deserialize_address")]
-    address: Address,
+    pub address: Address,
+}
+
+impl std::fmt::Display for BaseRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "network: {:?}, address: {}", self.network, self.address)
+    }
 }
 
 /// Custom deserializer to allow for FVM or EVM addresses to be used as input.
@@ -48,10 +54,19 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
     let (code, message) = if err.is_not_found() {
         (StatusCode::NOT_FOUND, "Not Found".to_string())
     } else if let Some(e) = err.find::<BadRequest>() {
-        let err = e.to_owned();
-        (StatusCode::BAD_REQUEST, err.message)
+        (StatusCode::BAD_REQUEST, e.message.clone())
+    } else if let Some(e) = err.find::<warp::filters::body::BodyDeserializeError>() {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("Invalid Request Body: {}", e),
+        )
+    } else if let Some(_) = err.find::<warp::reject::InvalidHeader>() {
+        (StatusCode::BAD_REQUEST, "Invalid Header Value".to_string())
     } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", err))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal Server Error".to_string(),
+        )
     };
 
     let reply = warp::reply::json(&ErrorMessage {

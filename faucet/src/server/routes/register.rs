@@ -10,13 +10,21 @@ use warp::{Filter, Rejection, Reply};
 
 use adm_sdk::{account::Account, network::Network as SdkNetwork};
 
+use crate::server::log_request_body;
+
 use super::{get_faucet_wallet, with_private_key, BadRequest, BaseRequest};
 
-/// Register request (equivalent to [`BaseRequest`]).
+/// Register request (essentially, equivalent to [`BaseRequest`]).
 #[derive(Deserialize)]
 pub struct RegisterRequest {
     #[serde(flatten)]
     pub base: BaseRequest,
+}
+
+impl std::fmt::Display for RegisterRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.base)
+    }
 }
 
 impl Deref for RegisterRequest {
@@ -31,8 +39,8 @@ impl Deref for RegisterRequest {
 pub fn register_route(
     private_key: SecretKey,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::post()
-        .and(warp::path("register"))
+    warp::path("register")
+        .and(warp::post())
         .and(warp::header::exact("content-type", "application/json"))
         .and(warp::body::json())
         .and(with_private_key(private_key.clone()))
@@ -43,9 +51,11 @@ pub fn register_route(
 pub async fn handle_register(
     req: RegisterRequest,
     private_key: SecretKey,
-) -> Result<impl Reply, Rejection> {
+) -> anyhow::Result<impl Reply, Rejection> {
     req.network.init();
-    let res = register(req.address, req.network, private_key)
+    log_request_body("register", &format!("{}", req));
+
+    let res = register(req.network, req.address, private_key)
         .await
         .map_err(|e| {
             Rejection::from(BadRequest {
@@ -59,8 +69,8 @@ pub async fn handle_register(
 /// Registers an account on the subnet, creating the delegated EVM address (by
 /// transferring 0 FIL).
 pub async fn register(
-    address: Address,
     network: SdkNetwork,
+    address: Address,
     private_key: SecretKey,
 ) -> anyhow::Result<TransactionReceipt, Box<dyn Error>> {
     let signer = get_faucet_wallet(private_key, network)?;

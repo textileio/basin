@@ -4,7 +4,7 @@ use stderrlog::Timestamp;
 
 use adm_signer::key::parse_secret_key;
 
-use crate::server::handle_server;
+use crate::server::run;
 
 mod server;
 
@@ -37,5 +37,5 @@ async fn main() -> anyhow::Result<()> {
         .init()
         .unwrap();
 
-    handle_server(cli).await
+    run(cli).await
 }
