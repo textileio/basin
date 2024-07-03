@@ -166,43 +166,25 @@ impl ObjectStore {
         // Generate object Cid
         // We do this here to avoid moving the reader
         let chunk_size = 1024 * 1024; // size-1048576
-        let mut adder = FileAdder::builder()
+        let adder = FileAdder::builder()
             .with_chunker(Chunker::Size(chunk_size))
             .build();
-        let mut buffer = vec![0; chunk_size];
+        let buffer = vec![0; chunk_size];
         let mut reader_size: usize = 0;
         let mut object_size: usize = 0;
 
         msg_bar.set_prefix("[1/3]");
-        let mut chunk = Cid::from(cid::Cid::default());
-
-        loop {
-            match reader.read(&mut buffer).await {
-                Ok(0) => {
-                    break;
-                }
-                Ok(n) => {
-                    reader_size += n;
-                    let (leaf, n) = adder.push(&buffer[..n]);
-                    for (c, _) in leaf {
-                        chunk = Cid::from(cid::Cid::try_from(c.to_bytes())?);
-                        msg_bar.set_message(format!("Processed chunk: {}", c));
-                    }
-                    object_size += n;
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
-        }
-        let unixfs_iterator = adder.finish();
-        // Turns out if input is equal to chunk size, the iterator will be empty,
-        // and the object cid will be equal to the first processed chunk ¯\_(ツ)_/¯
-        let last = unixfs_iterator.last();
-        let object_cid = match last {
-            Some((c, _)) => Cid::from(cid::Cid::try_from(c.to_bytes())?),
-            None => chunk,
-        };
+        let chunk = Cid::from(cid::Cid::default());
+        let object_cid = generate_cid(
+            &mut reader,
+            buffer,
+            &mut reader_size,
+            adder,
+            chunk,
+            &msg_bar,
+            &mut object_size,
+        )
+        .await?;
 
         // Rewind and stream for uploading
         msg_bar.set_prefix("[2/3]");
@@ -446,6 +428,43 @@ impl ObjectStore {
         let response = provider.call(message, options.height, decode_list).await?;
         Ok(response.value)
     }
+}
+
+async fn generate_cid<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    mut buffer: Vec<u8>,
+    reader_size: &mut usize,
+    mut adder: FileAdder,
+    mut chunk: Cid,
+    msg_bar: &indicatif::ProgressBar,
+    object_size: &mut usize,
+) -> Result<Cid, anyhow::Error> {
+    loop {
+        match reader.read(&mut buffer).await {
+            Ok(0) => {
+                break;
+            }
+            Ok(n) => {
+                *reader_size += n;
+                let (leaf, n) = adder.push(&buffer[..n]);
+                for (c, _) in leaf {
+                    chunk = Cid::from(cid::Cid::try_from(c.to_bytes())?);
+                    msg_bar.set_message(format!("Processed chunk: {}", c));
+                }
+                *object_size += n;
+            }
+            Err(e) => {
+                return Err(e.into());
+            }
+        }
+    }
+    let unixfs_iterator = adder.finish();
+    let last = unixfs_iterator.last();
+    let object_cid = match last {
+        Some((c, _)) => Cid::from(cid::Cid::try_from(c.to_bytes())?),
+        None => chunk,
+    };
+    Ok(object_cid)
 }
 
 fn decode_get(deliver_tx: &DeliverTx) -> anyhow::Result<Option<Object>> {
