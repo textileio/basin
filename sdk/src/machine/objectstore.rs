@@ -1,7 +1,7 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
-use std::cmp::min;
+use std::{cmp::min, collections::HashMap};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -9,16 +9,15 @@ use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
 use fendermint_actor_machine::WriteAccess;
 use fendermint_actor_objectstore::{
-    DeleteParams, GetParams,
-    Method::{DeleteObject, GetObject, ListObjects, PutObject},
-    Object, ObjectKind, ObjectList, PutParams,
+    AddParams, DeleteParams, GetParams,
+    Method::{AddObject, DeleteObject, GetObject, ListObjects},
+    Object, ObjectList,
 };
 use fendermint_vm_actor_interface::adm::Kind;
 use fendermint_vm_message::{query::FvmQueryHeight, signed::Object as MessageObject};
-use fvm_ipld_encoding::{serde_bytes::ByteBuf, RawBytes};
+use fvm_ipld_encoding::RawBytes;
 use fvm_shared::address::Address;
 use indicatif::HumanDuration;
-use num_traits::Zero;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 use tokio::{
@@ -45,8 +44,6 @@ use crate::{
     progress::new_progress_bar,
 };
 
-const MAX_INTERNAL_OBJECT_LENGTH: usize = 1024;
-
 /// Object add options.
 #[derive(Clone, Default, Debug)]
 pub struct AddOptions {
@@ -58,6 +55,8 @@ pub struct AddOptions {
     pub gas_params: GasParams,
     /// Whether to show progress-related output (useful for command-line interfaces).
     pub show_progress: bool,
+    /// Metadata to add to the object.
+    pub metadata: HashMap<String, String>,
 }
 
 /// Object delete options.
@@ -109,31 +108,6 @@ impl Default for QueryOptions {
             height: Default::default(),
         }
     }
-}
-
-/// Parse a range string and return start and end byte positions.
-fn parse_range(range: String, size: u64) -> anyhow::Result<(u64, u64)> {
-    let range: Vec<String> = range.split('-').map(|n| n.to_string()).collect();
-    if range.len() != 2 {
-        return Err(anyhow!("invalid range format"));
-    }
-    let (start, end): (u64, u64) = match (!range[0].is_empty(), !range[1].is_empty()) {
-        (true, true) => (range[0].parse::<u64>()?, range[1].parse::<u64>()?),
-        (true, false) => (range[0].parse::<u64>()?, size - 1),
-        (false, true) => {
-            let last = range[1].parse::<u64>()?;
-            if last > size {
-                (0, size - 1)
-            } else {
-                (size - last, size - 1)
-            }
-        }
-        (false, false) => (0, size - 1),
-    };
-    if start > end || end >= size {
-        return Err(anyhow!("invalid range"));
-    }
-    Ok((start, end))
 }
 
 /// A machine for S3-like object storage.
@@ -191,167 +165,102 @@ impl ObjectStore {
         let started = Instant::now();
         let bars = new_multi_bar(!options.show_progress);
         let msg_bar = bars.add(new_message_bar());
+        // Generate object Cid
+        // We do this here to avoid moving the reader
+        let chunk_size = 1024 * 1024; // size-1048576
+        let adder = FileAdder::builder()
+            .with_chunker(Chunker::Size(chunk_size))
+            .build();
+        let buffer = vec![0; chunk_size];
+        let mut reader_size: usize = 0;
+        let mut object_size: usize = 0;
 
-        // Sample reader to determine what kind of object will be added
-        let mut sample = vec![0; MAX_INTERNAL_OBJECT_LENGTH + 1];
-        let sampled = reader.read(&mut sample).await?;
-        if sampled.is_zero() {
-            return Err(anyhow!("cannot add empty object"));
-        }
+        msg_bar.set_prefix("[1/3]");
+        let chunk = Cid::from(cid::Cid::default());
+        let object_cid = generate_cid(
+            &mut reader,
+            buffer,
+            &mut reader_size,
+            adder,
+            chunk,
+            &msg_bar,
+            &mut object_size,
+        )
+        .await?;
+
+        // Rewind and stream for uploading
+        msg_bar.set_prefix("[2/3]");
+        msg_bar.set_message(format!("Uploading {} to network...", object_cid));
+        let pro_bar = bars.add(new_progress_bar(reader_size));
         reader.rewind().await?;
-
-        let tx = if sampled > MAX_INTERNAL_OBJECT_LENGTH {
-            // Handle as a detached object
-
-            // Generate object Cid
-            // We do this here to avoid moving the reader
-            let chunk_size = 1024 * 1024; // size-1048576
-            let mut adder = FileAdder::builder()
-                .with_chunker(Chunker::Size(chunk_size))
-                .build();
-            let mut buffer = vec![0; chunk_size];
-            let mut reader_size: usize = 0;
-            let mut object_size: usize = 0;
-
-            msg_bar.set_prefix("[1/3]");
-            let mut chunk = Cid::from(cid::Cid::default());
-            loop {
-                match reader.read(&mut buffer).await {
-                    Ok(0) => {
-                        break;
-                    }
-                    Ok(n) => {
-                        reader_size += n;
-                        let (leaf, n) = adder.push(&buffer[..n]);
-                        for (c, _) in leaf {
-                            chunk = Cid::from(cid::Cid::try_from(c.to_bytes())?);
-                            msg_bar.set_message(format!("Processed chunk: {}", c));
-                        }
-                        object_size += n;
-                    }
-                    Err(e) => {
-                        return Err(e.into());
-                    }
+        let mut stream = ReaderStream::new(reader);
+        let async_stream = async_stream::stream! {
+            let mut progress: usize = 0;
+            while let Some(chunk) = stream.next().await {
+                if let Ok(chunk) = &chunk {
+                    progress = min(progress + chunk.len(), reader_size);
+                    pro_bar.set_position(progress as u64);
                 }
+                yield chunk;
             }
-            let unixfs_iterator = adder.finish();
-            // Turns out if input is equal to chunk size, the iterator will be empty,
-            // and the object cid will be equal to the first processed chunk ¯\_(ツ)_/¯
-            let last = unixfs_iterator.last();
-            let object_cid = match last {
-                Some((c, _)) => Cid::from(cid::Cid::try_from(c.to_bytes())?),
-                None => chunk,
-            };
-
-            // Rewind and stream for uploading
-            msg_bar.set_prefix("[2/3]");
-            msg_bar.set_message(format!("Uploading {} to network...", object_cid));
-            let pro_bar = bars.add(new_progress_bar(reader_size));
-            reader.rewind().await?;
-            let mut stream = ReaderStream::new(reader);
-            let async_stream = async_stream::stream! {
-                let mut progress: usize = 0;
-                while let Some(chunk) = stream.next().await {
-                    if let Ok(chunk) = &chunk {
-                        progress = min(progress + chunk.len(), reader_size);
-                        pro_bar.set_position(progress as u64);
-                    }
-                    yield chunk;
-                }
-                pro_bar.finish_and_clear();
-            };
-
-            // Upload Object to Object API
-            let response_cid = self
-                .upload(
-                    provider,
-                    signer,
-                    key,
-                    async_stream,
-                    object_cid,
-                    object_size,
-                    options.overwrite,
-                )
-                .await?;
-
-            // Verify uploaded CID with locally computed CID
-            if response_cid != object_cid {
-                return Err(anyhow!("cannot verify object; cid does not match remote"));
-            }
-
-            // Broadcast transaction with Object's CID
-            msg_bar.set_prefix("[3/3]");
-            msg_bar.set_message("Broadcasting transaction...");
-            let params = PutParams {
-                key: key.into(),
-                kind: ObjectKind::External(object_cid.0),
-                overwrite: options.overwrite,
-            };
-            let serialized_params = RawBytes::serialize(params.clone())?;
-            let object = Some(MessageObject::new(
-                params.key.clone(),
-                object_cid.0,
-                self.address,
-            ));
-            let message = signer
-                .transaction(
-                    self.address,
-                    Default::default(),
-                    PutObject as u64,
-                    serialized_params,
-                    object,
-                    options.gas_params,
-                )
-                .await?;
-
-            let tx = provider
-                .perform(message, options.broadcast_mode, decode_cid)
-                .await?;
-
-            msg_bar.println(format!(
-                "{} Added detached object in {} (cid={}; size={})",
-                SPARKLE,
-                HumanDuration(started.elapsed()),
-                object_cid,
-                object_size
-            ));
-            tx
-        } else {
-            // Handle as an internal object
-
-            // Broadcast transaction with Object's CID
-            msg_bar.set_prefix("[1/1]");
-            msg_bar.set_message("Broadcasting transaction...");
-            sample.truncate(sampled);
-            let params = PutParams {
-                key: key.into(),
-                kind: ObjectKind::Internal(ByteBuf(sample)),
-                overwrite: options.overwrite,
-            };
-            let serialized_params = RawBytes::serialize(params)?;
-            let message = signer
-                .transaction(
-                    self.address,
-                    Default::default(),
-                    PutObject as u64,
-                    serialized_params,
-                    None,
-                    options.gas_params,
-                )
-                .await?;
-            let tx = provider
-                .perform(message, options.broadcast_mode, decode_cid)
-                .await?;
-
-            msg_bar.println(format!(
-                "{} Added object in {} (size={})",
-                SPARKLE,
-                HumanDuration(started.elapsed()),
-                sampled
-            ));
-            tx
+            pro_bar.finish_and_clear();
         };
 
+        // Upload Object to Object API
+        let response_cid = self
+            .upload(
+                provider,
+                signer,
+                key,
+                async_stream,
+                object_cid,
+                object_size,
+                options.metadata.clone(),
+                options.overwrite,
+            )
+            .await?;
+
+        // Verify uploaded CID with locally computed CID
+        if response_cid != object_cid {
+            return Err(anyhow!("cannot verify object; cid does not match remote"));
+        }
+
+        // Broadcast transaction with Object's CID
+        msg_bar.set_prefix("[3/3]");
+        msg_bar.set_message("Broadcasting transaction...");
+        let params = AddParams {
+            key: key.into(),
+            cid: object_cid.0,
+            overwrite: options.overwrite,
+            metadata: options.metadata,
+            size: object_size,
+        };
+        let serialized_params = RawBytes::serialize(params.clone())?;
+        let object = Some(MessageObject::new(
+            params.key.clone(),
+            object_cid.0,
+            self.address,
+        ));
+        let message = signer
+            .transaction(
+                self.address,
+                Default::default(),
+                AddObject as u64,
+                serialized_params,
+                object,
+                options.gas_params,
+            )
+            .await?;
+        let tx = provider
+            .perform(message, options.broadcast_mode, decode_cid)
+            .await?;
+        msg_bar.println(format!(
+            "{} Added object in {} (cid={}; size={})",
+            SPARKLE,
+            HumanDuration(started.elapsed()),
+            object_cid,
+            object_size
+        ));
         msg_bar.finish_and_clear();
         Ok(tx)
     }
@@ -366,6 +275,7 @@ impl ObjectStore {
         stream: S,
         cid: Cid,
         size: usize,
+        metadata: HashMap<String, String>,
         overwrite: bool,
     ) -> anyhow::Result<Cid>
     where
@@ -374,15 +284,17 @@ impl ObjectStore {
         Bytes: From<S::Ok>,
     {
         let from = signer.address();
-        let params = PutParams {
+        let params = AddParams {
             key: key.into(),
-            kind: ObjectKind::External(cid.0),
+            cid: cid.0,
             overwrite,
+            metadata,
+            size,
         };
         let serialized_params = RawBytes::serialize(params)?;
 
         let message =
-            object_upload_message(from, self.address, PutObject as u64, serialized_params);
+            object_upload_message(from, self.address, AddObject as u64, serialized_params);
         let singed_message = signer.sign_message(
             message,
             Some(MessageObject::new(key.into(), cid.0, self.address)),
@@ -462,64 +374,42 @@ impl ObjectStore {
         let object = response
             .value
             .ok_or_else(|| anyhow!("object not found for key '{}'", key))?;
-        match object {
-            Object::Internal(buf) => {
-                msg_bar.set_prefix("[2/2]");
-                msg_bar.set_message(format!("Writing {} bytes...", buf.0.len()));
-                if let Some(range) = options.range {
-                    let (start, end) = parse_range(range, buf.0.len() as u64)?;
-                    writer
-                        .write_all(&buf.0[start as usize..=end as usize])
-                        .await?;
-                } else {
-                    writer.write_all(&buf.0).await?;
-                }
 
-                msg_bar.println(format!(
-                    "{} Got object from chain in {} (size={})",
-                    SPARKLE,
-                    HumanDuration(started.elapsed()),
-                    buf.0.len()
-                ));
-            }
-            Object::External((buf, resolved)) => {
-                let cid = cid::Cid::try_from(buf.0)?;
-                if !resolved {
-                    return Err(anyhow!("object is not resolved"));
-                }
-                msg_bar.set_prefix("[2/2]");
-                msg_bar.set_message(format!("Downloading {}... ", cid));
+        let cid = cid::Cid::try_from(object.cid.0)?;
+        if !object.resolved {
+            return Err(anyhow!("object is not resolved"));
+        }
+        msg_bar.set_prefix("[2/2]");
+        msg_bar.set_message(format!("Downloading {}... ", cid));
 
-                let object_size = provider
-                    .size(self.address, key, options.height.into())
-                    .await?;
-                let pro_bar = bars.add(new_progress_bar(object_size));
-                let response = provider
-                    .download(self.address, key, options.range, options.height.into())
-                    .await?;
-                let mut stream = response.bytes_stream();
-                let mut progress = 0;
-                while let Some(item) = stream.next().await {
-                    match item {
-                        Ok(chunk) => {
-                            writer.write_all(&chunk).await?;
-                            progress = min(progress + chunk.len(), object_size);
-                            pro_bar.set_position(progress as u64);
-                        }
-                        Err(e) => {
-                            return Err(anyhow!(e));
-                        }
-                    }
+        let object_size = provider
+            .size(self.address, key, options.height.into())
+            .await?;
+        let pro_bar = bars.add(new_progress_bar(object_size));
+        let response = provider
+            .download(self.address, key, options.range, options.height.into())
+            .await?;
+        let mut stream = response.bytes_stream();
+        let mut progress = 0;
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(chunk) => {
+                    writer.write_all(&chunk).await?;
+                    progress = min(progress + chunk.len(), object_size);
+                    pro_bar.set_position(progress as u64);
                 }
-                pro_bar.finish_and_clear();
-                msg_bar.println(format!(
-                    "{} Downloaded detached object in {} (cid={})",
-                    SPARKLE,
-                    HumanDuration(started.elapsed()),
-                    cid
-                ));
+                Err(e) => {
+                    return Err(anyhow!(e));
+                }
             }
         }
+        pro_bar.finish_and_clear();
+        msg_bar.println(format!(
+            "{} Downloaded detached object in {} (cid={})",
+            SPARKLE,
+            HumanDuration(started.elapsed()),
+            cid
+        ));
 
         msg_bar.finish_and_clear();
         Ok(())
@@ -544,6 +434,43 @@ impl ObjectStore {
         let response = provider.call(message, options.height, decode_list).await?;
         Ok(response.value)
     }
+}
+
+async fn generate_cid<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    mut buffer: Vec<u8>,
+    reader_size: &mut usize,
+    mut adder: FileAdder,
+    mut chunk: Cid,
+    msg_bar: &indicatif::ProgressBar,
+    object_size: &mut usize,
+) -> Result<Cid, anyhow::Error> {
+    loop {
+        match reader.read(&mut buffer).await {
+            Ok(0) => {
+                break;
+            }
+            Ok(n) => {
+                *reader_size += n;
+                let (leaf, n) = adder.push(&buffer[..n]);
+                for (c, _) in leaf {
+                    chunk = Cid::from(cid::Cid::try_from(c.to_bytes())?);
+                    msg_bar.set_message(format!("Processed chunk: {}", c));
+                }
+                *object_size += n;
+            }
+            Err(e) => {
+                return Err(e.into());
+            }
+        }
+    }
+    let unixfs_iterator = adder.finish();
+    let last = unixfs_iterator.last();
+    let object_cid = match last {
+        Some((c, _)) => Cid::from(cid::Cid::try_from(c.to_bytes())?),
+        None => chunk,
+    };
+    Ok(object_cid)
 }
 
 fn decode_get(deliver_tx: &DeliverTx) -> anyhow::Result<Option<Object>> {
