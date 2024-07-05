@@ -341,7 +341,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .map(|(key_bytes, object)| {
                     let key = core::str::from_utf8(&key_bytes).unwrap_or_default().to_string();                    
                     let cid = cid::Cid::try_from(object.cid.clone().0).unwrap_or_default();                    
-                    let value = json!({"content": cid, "resolved": object.resolved, "size": object.size, "metadata": object.metadata});
+                    let value = json!({"cid": cid.to_string(), "resolved": object.resolved, "size": object.size, "metadata": object.metadata});
                     json!({"key": key, "value": value})
                 })
                 .collect::<Vec<Value>>();
