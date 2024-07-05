@@ -93,7 +93,7 @@ struct ObjectstorePutArgs {
     broadcast_mode: BroadcastMode,
     #[command(flatten)]
     tx_args: TxArgs,
-    #[arg(long, value_parser = parse_metadata::<String, String>)]
+    #[arg(short, long, value_parser = parse_metadata)]
     metadata: Vec<(String, String)>,
 }
 
@@ -231,7 +231,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 sequence,
                 gas_params,
             } = args.tx_args.to_tx_params();
-            let metadata = args.metadata.clone().into_iter().collect::<HashMap<String, String>>();
+            let metadata: HashMap<String, String> = args.metadata.clone().into_iter().collect();
 
             let mut signer = Wallet::new_secp256k1(
                 args.private_key.clone(),

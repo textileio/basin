@@ -59,21 +59,11 @@ pub fn parse_query_height(s: &str) -> anyhow::Result<FvmQueryHeight> {
 }
 
 /// Parse metadata from string.
-pub fn parse_metadata<T, U>(s: &str) -> anyhow::Result<(T, U)>
-where
-    T: FromStr,
-    T::Err: ToString,
-    U: FromStr,
-    U::Err: ToString,
-{
+pub fn parse_metadata(s: &str) -> anyhow::Result<(String, String)> {
     let pos = s
         .find('=')
         .ok_or_else(|| anyhow::anyhow!("Expected KEY=VALUE format but `=` not found in `{}`", s))?;
-    let key = s[..pos]
-        .parse()
-        .map_err(|e: T::Err| anyhow::anyhow!("Failed to parse key: {}", e.to_string()))?;
-    let val = s[pos + 1..]
-        .parse()
-        .map_err(|e: U::Err| anyhow::anyhow!("Failed to parse value: {}", e.to_string()))?;
+    let key = s[..pos].to_string();
+    let val = s[pos + 1..].to_string();
     Ok((key, val))
 }
