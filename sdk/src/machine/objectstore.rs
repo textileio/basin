@@ -55,6 +55,8 @@ pub struct AddOptions {
     pub gas_params: GasParams,
     /// Whether to show progress-related output (useful for command-line interfaces).
     pub show_progress: bool,
+    /// Metadata to add to the object.
+    pub metadata: HashMap<String, String>,
 }
 
 /// Object delete options.
@@ -213,6 +215,7 @@ impl ObjectStore {
                 async_stream,
                 object_cid,
                 object_size,
+                options.metadata.clone(),
                 options.overwrite,
             )
             .await?;
@@ -229,7 +232,8 @@ impl ObjectStore {
             key: key.into(),
             cid: object_cid.0,
             overwrite: options.overwrite,
-            metadata: HashMap::new(),
+            metadata: options.metadata,
+            size: object_size,
         };
         let serialized_params = RawBytes::serialize(params.clone())?;
         let object = Some(MessageObject::new(
@@ -271,6 +275,7 @@ impl ObjectStore {
         stream: S,
         cid: Cid,
         size: usize,
+        metadata: HashMap<String, String>,
         overwrite: bool,
     ) -> anyhow::Result<Cid>
     where
@@ -283,7 +288,8 @@ impl ObjectStore {
             key: key.into(),
             cid: cid.0,
             overwrite,
-            metadata: HashMap::new(),
+            metadata,
+            size,
         };
         let serialized_params = RawBytes::serialize(params)?;
 

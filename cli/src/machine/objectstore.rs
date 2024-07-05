@@ -13,10 +13,11 @@ use serde_json::{json, Value};
 use tendermint_rpc::Url;
 use tokio::fs::File;
 use tokio::io::{self};
+use std::collections::HashMap;
 
 use adm_provider::{
     json_rpc::JsonRpcProvider,
-    util::{parse_address, parse_query_height},
+    util::{parse_address, parse_query_height, parse_metadata},
 };
 use adm_sdk::machine::objectstore::{AddOptions, DeleteOptions, GetOptions};
 use adm_sdk::{
@@ -92,6 +93,8 @@ struct ObjectstorePutArgs {
     broadcast_mode: BroadcastMode,
     #[command(flatten)]
     tx_args: TxArgs,
+    #[arg(long, value_parser = parse_metadata::<String, String>)]
+    metadata: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, Parser)]
@@ -228,6 +231,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 sequence,
                 gas_params,
             } = args.tx_args.to_tx_params();
+            let metadata = args.metadata.clone().into_iter().collect::<HashMap<String, String>>();
 
             let mut signer = Wallet::new_secp256k1(
                 args.private_key.clone(),
@@ -254,6 +258,7 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                         broadcast_mode,
                         gas_params,
                         show_progress: !cli.quiet,
+                        metadata,
                     },
                 )
                 .await?;
@@ -335,8 +340,9 @@ pub async fn handle_objectstore(cli: Cli, args: &ObjectstoreArgs) -> anyhow::Res
                 .iter()
                 .map(|(key_bytes, object)| {
                     let key = core::str::from_utf8(&key_bytes).unwrap_or_default().to_string();                    
-                    let cid = cid::Cid::try_from(object.cid.clone().0).unwrap_or_default();
-                    json!({"key": key, "value": json!({"content": cid, "resolved": object.resolved})})                    
+                    let cid = cid::Cid::try_from(object.cid.clone().0).unwrap_or_default();                    
+                    let value = json!({"content": cid, "resolved": object.resolved, "size": object.size, "metadata": object.metadata});
+                    json!({"key": key, "value": value})
                 })
                 .collect::<Vec<Value>>();
             let common_prefixes = list
