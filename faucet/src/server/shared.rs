@@ -58,8 +58,13 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
             StatusCode::BAD_REQUEST,
             format!("Invalid Request Body: {}", e),
         )
-    } else if let Some(_) = err.find::<warp::reject::InvalidHeader>() {
+    } else if err.find::<warp::reject::InvalidHeader>().is_some() {
         (StatusCode::BAD_REQUEST, "Invalid Header Value".to_string())
+    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
+        (
+            StatusCode::METHOD_NOT_ALLOWED,
+            "Method Not Allowed".to_string(),
+        )
     } else {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -77,7 +82,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
 /// Filter to pass the private key to the request handler.
 pub fn with_private_key(
     private_key: SecretKey,
-) -> impl Filter<Extract = (SecretKey,), Error = std::convert::Infallible> + Clone {
+) -> impl Filter<Extract = (SecretKey,), Error = Infallible> + Clone {
     warp::any().map(move || private_key.clone())
 }
 

@@ -60,7 +60,7 @@ pub async fn handle_register(
         .await
         .map_err(|e| {
             Rejection::from(BadRequest {
-                message: format!("register error: {}", e.to_string()),
+                message: format!("register error: {}", e),
             })
         })?;
     let json = json!(res);

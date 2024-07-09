@@ -103,7 +103,7 @@ impl Network {
         })
     }
 
-    /// Returns the network [`Url`] of the CometBFT PRC API.
+    /// Returns the network [`Url`] of the CometBFT RPC API.
     pub fn rpc_url(&self) -> anyhow::Result<Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -121,7 +121,7 @@ impl Network {
         }
     }
 
-    /// Returns the network [`reqwest::Url`] of the EVM PRC API.
+    /// Returns the network [`reqwest::Url`] of the EVM RPC API.
     pub fn evm_rpc_url(&self) -> anyhow::Result<reqwest::Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -160,7 +160,7 @@ impl Network {
         })
     }
 
-    /// Returns the network [`reqwest::Url`] of the parent EVM PRC API.
+    /// Returns the network [`reqwest::Url`] of the parent EVM RPC API.
     pub fn parent_evm_rpc_url(&self) -> anyhow::Result<reqwest::Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -183,6 +183,15 @@ impl Network {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
             Network::Testnet => Ok(parse_address(TESTNET_PARENT_EVM_REGISTRY_ADDRESS)?),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
+        }
+    }
+
+    /// Returns the network [`reqwest::Url`] of the Faucet API.
+    pub fn faucet_api_url(&self) -> anyhow::Result<reqwest::Url> {
+        match self {
+            Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
+            Network::Testnet => Ok(reqwest::Url::from_str(TESTNET_FAUCET_API_URL)?),
             Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
     }

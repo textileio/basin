@@ -1,17 +1,18 @@
+use log::info;
 use warp::Filter;
 
 use crate::Cli;
 
 use util::log_request_details;
 
-pub mod register;
-pub mod shared;
-pub mod util;
+mod register;
+mod shared;
+mod util;
 
 /// Server entrypoint for the faucet service.
 pub async fn run(cli: Cli) -> anyhow::Result<()> {
-    let faucet_pk = cli.faucet_private_key;
-    let port = cli.faucet_port.unwrap_or_default();
+    let faucet_pk = cli.private_key;
+    let listen_addr = cli.listen;
 
     let register_route = register::register_route(faucet_pk.clone());
 
@@ -27,6 +28,7 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
         .with(log_request_details)
         .recover(shared::handle_rejection);
 
-    warp::serve(router).run(([127, 0, 0, 1], port)).await;
+    info!("Starting server at {}", listen_addr);
+    warp::serve(router).run(listen_addr).await;
     Ok(())
 }

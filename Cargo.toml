@@ -33,7 +33,6 @@ clap = { version = "4.1.14", features = [
 ] }
 clap-stdin = { version = "0.4.0", features = ["tokio"] }
 console = "0.15.8"
-dotenv = "0.15.0"
 ethers = "2.0.14"
 ethers-contract = "2.0.14"
 fnv = "1.0"

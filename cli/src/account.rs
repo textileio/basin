@@ -3,7 +3,6 @@
 
 use std::time::Duration;
 
-use anyhow::anyhow;
 use clap::{Args, Subcommand};
 use ethers::prelude::TransactionReceipt;
 use fendermint_crypto::SecretKey;
@@ -16,10 +15,7 @@ use adm_provider::{
     json_rpc::JsonRpcProvider,
     util::{get_delegated_address, parse_address, parse_token_amount},
 };
-use adm_sdk::{
-    account::Account, ipc::subnet::EVMSubnet, network::Network as SdkNetwork,
-    network::TESTNET_FAUCET_API_URL,
-};
+use adm_sdk::{account::Account, ipc::subnet::EVMSubnet, network::Network as SdkNetwork};
 use adm_signer::{
     key::parse_secret_key, key::random_secretkey, AccountKind, Signer, SubnetID, Void, Wallet,
 };
@@ -141,10 +137,10 @@ pub async fn handle_account(cli: Cli, args: &AccountArgs) -> anyhow::Result<()> 
         AccountCommands::Register(args) => {
             let addr_args = AddressArgs {
                 private_key: args.private_key.clone(),
-                address: args.address.clone(),
+                address: args.address,
                 height: Default::default(),
             };
-            let height = addr_args.height.clone();
+            let height = addr_args.height;
             let address = get_address(addr_args, &subnet_id)?;
             let eth_address = get_delegated_address(address)?;
             let eth_addr_str = format!("{:?}", eth_address);
@@ -277,12 +273,6 @@ fn get_parent_subnet_config(
 fn get_faucet_url(network: SdkNetwork, url: Option<Url>) -> anyhow::Result<Url> {
     match url {
         Some(u) => Ok(u),
-        None => match network {
-            SdkNetwork::Testnet => Url::parse(TESTNET_FAUCET_API_URL).map_err(anyhow::Error::msg),
-            SdkNetwork::Mainnet | SdkNetwork::Devnet | SdkNetwork::Localnet => Err(anyhow!(
-                "registration not supported on '{}'",
-                network.to_string()
-            )),
-        },
+        None => network.faucet_api_url(),
     }
 }

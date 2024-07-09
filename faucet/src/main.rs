@@ -1,3 +1,6 @@
+use std::net::{SocketAddr, ToSocketAddrs};
+
+use anyhow::anyhow;
 use clap::Parser;
 use fendermint_crypto::SecretKey;
 use stderrlog::Timestamp;
@@ -13,16 +16,27 @@ mod server;
 struct Cli {
     /// Wallet private key (ECDSA, secp256k1) for sending faucet funds.
     #[arg(short, long, env, value_parser = parse_secret_key)]
-    faucet_private_key: SecretKey,
-    /// Faucet HTTP server port.
-    #[arg(long, env, default_value("8081"))]
-    faucet_port: Option<u16>,
+    private_key: SecretKey,
+    /// Faucet `host:port` string for running the HTTP server.
+    #[arg(long, env, value_parser = parse_faucet_url)]
+    listen: SocketAddr,
     /// Logging verbosity (repeat for more verbose logging).
     #[arg(short, long, env, action = clap::ArgAction::Count)]
     verbosity: u8,
     /// Silence logging.
     #[arg(short, long, env, default_value_t = false)]
     quiet: bool,
+}
+
+/// Parse the [`SocketAddr`] from a faucet URL string.
+fn parse_faucet_url(listen: &str) -> anyhow::Result<SocketAddr> {
+    match listen.to_socket_addrs()?.next() {
+        Some(addr) => Ok(addr),
+        None => Err(anyhow!(
+            "failed to convert to any socket address: {}",
+            listen
+        )),
+    }
 }
 
 #[tokio::main]
