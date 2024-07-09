@@ -1,11 +1,13 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::fmt::Display;
 use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use fvm_shared::address::{set_current_network, Address, Network as FvmNetwork};
+use fvm_shared::address::{set_current_network, Address, Error, Network as FvmNetwork};
+use serde::{Deserialize, Deserializer};
 use tendermint_rpc::Url;
 
 use adm_provider::util::parse_address;
@@ -32,6 +34,8 @@ const TESTNET_PARENT_EVM_REGISTRY_ADDRESS: &str = "0x7Eb0a3511BB5DB2b5f945e6EB80
 
 const TESTNET_OBJECT_API_URL: &str = "https://object-api.n1.testnet.basin.storage";
 const LOCALNET_OBJECT_API_URL: &str = "http://127.0.0.1:8001";
+
+pub const TESTNET_FAUCET_API_URL: &str = "https://faucet.testnet.basin.storage";
 
 /// Options for [`EVMSubnet`] configurations.
 #[derive(Debug, Clone)]
@@ -99,7 +103,7 @@ impl Network {
         })
     }
 
-    /// Returns the network [`Url`] of the CometBFT PRC API.
+    /// Returns the network [`Url`] of the CometBFT RPC API.
     pub fn rpc_url(&self) -> anyhow::Result<Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -117,7 +121,7 @@ impl Network {
         }
     }
 
-    /// Returns the network [`reqwest::Url`] of the EVM PRC API.
+    /// Returns the network [`reqwest::Url`] of the EVM RPC API.
     pub fn evm_rpc_url(&self) -> anyhow::Result<reqwest::Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -156,7 +160,7 @@ impl Network {
         })
     }
 
-    /// Returns the network [`reqwest::Url`] of the parent EVM PRC API.
+    /// Returns the network [`reqwest::Url`] of the parent EVM RPC API.
     pub fn parent_evm_rpc_url(&self) -> anyhow::Result<reqwest::Url> {
         match self {
             Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
@@ -181,5 +185,49 @@ impl Network {
             Network::Testnet => Ok(parse_address(TESTNET_PARENT_EVM_REGISTRY_ADDRESS)?),
             Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
         }
+    }
+
+    /// Returns the network [`reqwest::Url`] of the Faucet API.
+    pub fn faucet_api_url(&self) -> anyhow::Result<reqwest::Url> {
+        match self {
+            Network::Mainnet => Err(anyhow!("network is pre-mainnet")),
+            Network::Testnet => Ok(reqwest::Url::from_str(TESTNET_FAUCET_API_URL)?),
+            Network::Localnet | Network::Devnet => Err(anyhow!("network has no parent")),
+        }
+    }
+}
+
+impl FromStr for Network {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mainnet" => Ok(Network::Mainnet),
+            "testnet" => Ok(Network::Testnet),
+            "localnet" => Ok(Network::Localnet),
+            "devnet" => Ok(Network::Devnet),
+            _ => Err(Error::UnknownNetwork.to_string()),
+        }
+    }
+}
+
+impl Display for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Network::Mainnet => write!(f, "mainnet"),
+            Network::Testnet => write!(f, "testnet"),
+            Network::Localnet => write!(f, "localnet"),
+            Network::Devnet => write!(f, "devnet"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Network {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = String::deserialize(deserializer)?;
+        Network::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
