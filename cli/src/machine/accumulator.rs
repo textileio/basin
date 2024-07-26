@@ -1,6 +1,7 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use adm_provider::util::parse_metadata;
 use bytes::Bytes;
 use clap::{Args, Subcommand};
 use clap_stdin::FileOrStdin;
@@ -9,6 +10,7 @@ use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 
 use adm_provider::{
@@ -63,6 +65,8 @@ struct AccumulatorCreateArgs {
     public_write: bool,
     #[command(flatten)]
     tx_args: TxArgs,
+    #[arg(short, long, value_parser = parse_metadata)]
+    metadata: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -134,8 +138,11 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
                 Wallet::new_secp256k1(args.private_key.clone(), AccountKind::Ethereum, subnet_id)?;
             signer.set_sequence(sequence, &provider).await?;
 
+            let metadata: HashMap<String, String> = args.metadata.clone().into_iter().collect();
+
             let (store, tx) =
-                Accumulator::new(&provider, &mut signer, write_access, gas_params).await?;
+                Accumulator::new(&provider, &mut signer, write_access, metadata, gas_params)
+                    .await?;
 
             print_json(&json!({"address": store.address().to_string(), "tx": &tx}))
         }
@@ -145,7 +152,7 @@ pub async fn handle_accumulator(cli: Cli, args: &AccumulatorArgs) -> anyhow::Res
 
             let metadata = metadata
                 .iter()
-                .map(|m| json!({"address": m.address.to_string(), "kind": m.kind}))
+                .map(|m| json!({"address": m.address.to_string(), "kind": m.kind, "metadata": m.metadata}))
                 .collect::<Vec<Value>>();
 
             print_json(&metadata)

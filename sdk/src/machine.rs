@@ -12,6 +12,7 @@ use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::RawBytes;
 use fvm_shared::address::Address;
 use serde::Serialize;
+use std::collections::HashMap;
 use tendermint::{abci::response::DeliverTx, block::Height, Hash};
 use tendermint_rpc::Client;
 
@@ -49,6 +50,7 @@ pub trait Machine: Send + Sync + Sized {
         provider: &impl Provider<C>,
         signer: &mut impl Signer,
         write_access: WriteAccess,
+        metadata: HashMap<String, String>,
         gas_params: GasParams,
     ) -> anyhow::Result<(Self, DeployTxReceipt)>
     where
@@ -103,12 +105,18 @@ async fn deploy_machine<C>(
     signer: &mut impl Signer,
     kind: Kind,
     write_access: WriteAccess,
+    metadata: HashMap<String, String>,
     gas_params: GasParams,
 ) -> anyhow::Result<(Address, DeployTxReceipt)>
 where
     C: Client + Send + Sync,
 {
-    let params = CreateExternalParams { kind, write_access };
+    let params = CreateExternalParams {
+        kind,
+        write_access,
+        metadata,
+    };
+
     let params = RawBytes::serialize(params)?;
     let message = signer
         .transaction(
