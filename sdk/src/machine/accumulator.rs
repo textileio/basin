@@ -1,6 +1,8 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::collections::HashMap;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -11,7 +13,6 @@ use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_ipld_encoding::{BytesSer, RawBytes};
 use fvm_shared::address::Address;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tendermint::abci::response::DeliverTx;
 use tendermint_rpc::Client;
 

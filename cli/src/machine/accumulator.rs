@@ -1,6 +1,8 @@
 // Copyright 2024 ADM Contributors
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::collections::HashMap;
+
 use adm_provider::util::parse_metadata;
 use bytes::Bytes;
 use clap::{Args, Subcommand};
@@ -10,7 +12,6 @@ use fendermint_crypto::SecretKey;
 use fendermint_vm_message::query::FvmQueryHeight;
 use fvm_shared::address::Address;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 
 use adm_provider::{
