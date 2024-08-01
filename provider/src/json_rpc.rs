@@ -194,7 +194,10 @@ where
             .clone()
             .ok_or_else(|| anyhow!("object provider is required"))?;
 
-        let url = format!("{}v1/objects/{}/{}?height={}", client.url, address, key, height);
+        let url = format!(
+            "{}v1/objects/{}/{}?height={}",
+            client.url, address, key, height
+        );
         let response = if let Some(range) = range {
             client
                 .inner
@@ -221,7 +224,10 @@ where
             .clone()
             .ok_or_else(|| anyhow!("object provider is required"))?;
 
-        let url = format!("{}v1/objects/{}/{}?height={}", client.url, address, key, height);
+        let url = format!(
+            "{}v1/objects/{}/{}?height={}",
+            client.url, address, key, height
+        );
         let response = client.inner.head(url).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!(format!(
