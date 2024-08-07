@@ -70,15 +70,15 @@ tendermint-rpc = { version = "0.31.1", features = [
 fvm_shared = "4.1.0"
 fvm_ipld_encoding = "0.4.0"
 
-fendermint_actor_accumulator = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
-fendermint_actor_machine = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
-fendermint_actor_objectstore = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
-fendermint_crypto = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
-fendermint_vm_actor_interface = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
-fendermint_vm_message = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
+fendermint_actor_accumulator = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
+fendermint_actor_machine = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
+fendermint_actor_objectstore = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
+fendermint_crypto = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
+fendermint_vm_actor_interface = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
+fendermint_vm_message = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
 
-ipc_actors_abis = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
-ipc-api = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
+ipc_actors_abis = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
+ipc-api = { git = "https://github.com/textileio/ipc.git", rev = "81958f46a599baa812acc0685f4ae41e3b9e3a1a" }
 
 # Uncomment entries below when working locally on ipc and this repo simultaneously.
 # Assumes the ipc checkout is in a sibling directory with the same name.

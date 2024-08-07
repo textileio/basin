@@ -1898,7 +1898,7 @@ dependencies = [
 [[package]]
 name = "fendermint_actor_accumulator"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -1917,7 +1917,7 @@ dependencies = [
 [[package]]
 name = "fendermint_actor_eam"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -1938,7 +1938,7 @@ dependencies = [
 [[package]]
 name = "fendermint_actor_machine"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "fil_actor_adm",
@@ -1953,7 +1953,7 @@ dependencies = [
 [[package]]
 name = "fendermint_actor_objectstore"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -1972,7 +1972,7 @@ dependencies = [
 [[package]]
 name = "fendermint_crypto"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -1984,7 +1984,7 @@ dependencies = [
 [[package]]
 name = "fendermint_vm_actor_interface"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -2012,7 +2012,7 @@ dependencies = [
 [[package]]
 name = "fendermint_vm_core"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "cid 0.10.1",
  "fnv",
@@ -2026,7 +2026,7 @@ dependencies = [
 [[package]]
 name = "fendermint_vm_encoding"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "cid 0.10.1",
  "fvm_shared",
@@ -2039,7 +2039,7 @@ dependencies = [
 [[package]]
 name = "fendermint_vm_genesis"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "fendermint_actor_eam",
@@ -2057,7 +2057,7 @@ dependencies = [
 [[package]]
 name = "fendermint_vm_message"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "blake2b_simd",
@@ -2091,7 +2091,7 @@ dependencies = [
 [[package]]
 name = "fil_actor_adm"
 version = "12.0.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -2111,7 +2111,7 @@ dependencies = [
 [[package]]
 name = "fil_actor_eam"
 version = "12.0.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -2132,7 +2132,7 @@ dependencies = [
 [[package]]
 name = "fil_actors_evm_shared"
 version = "12.0.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "fil_actors_runtime",
  "fvm_ipld_encoding",
@@ -2145,7 +2145,7 @@ dependencies = [
 [[package]]
 name = "fil_actors_runtime"
 version = "12.0.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -3183,7 +3183,7 @@ dependencies = [
 [[package]]
 name = "ipc-api"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -3211,7 +3211,7 @@ dependencies = [
 [[package]]
 name = "ipc-types"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
@@ -3235,7 +3235,7 @@ dependencies = [
 [[package]]
 name = "ipc_actors_abis"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "ethers",
@@ -3570,7 +3570,7 @@ dependencies = [
 [[package]]
 name = "merkle-tree-rs"
 version = "0.1.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "ethers",
@@ -6293,7 +6293,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vm_api"
 version = "1.0.0"
-source = "git+https://github.com/textileio/ipc.git?rev=89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7#89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7"
+source = "git+https://github.com/textileio/ipc.git?rev=81958f46a599baa812acc0685f4ae41e3b9e3a1a#81958f46a599baa812acc0685f4ae41e3b9e3a1a"
 dependencies = [
  "anyhow",
  "cid 0.10.1",
