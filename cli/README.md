@@ -80,7 +80,7 @@ To install the CLI, you'll need to download it from source, build, and install i
 
 ```sh
 git clone https://github.com/textileio/basin.git
-cd adm
+cd basin
 make install
 ```
 
