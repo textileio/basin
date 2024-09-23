@@ -5,6 +5,11 @@
 
 > Basin network interfaces & tooling for scalable subnets & onchain data storage.
 
+> [!WARNING]
+> Basin is currently in the process of being rewritten and is now in a closed beta.
+> The current version of Basin is no longer usable and will be archived soon. Once the new version is ready, we will
+> open source it again. If you're interested in the closed beta, please reach out to us on Discord!
+
 _Note_: Basin is referred to by our codename "ADM" throughout this repo.
 
 ## Table of Contents
